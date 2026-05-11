@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>V-b Curve (Single-mode condition)</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #ffffff;
+      --fg: #1a1a1a;
+      --muted: #666;
+      --card-bg: #f7f7f9;
+      --card-border: #e1e1e6;
+      --accent: #3b5bdb;
+      --input-bg: #ffffff;
+      --good: #2f9e44;
+      --bad: #e03131;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0e0e10;
+        --fg: #e8e8ea;
+        --muted: #9a9aa3;
+        --card-bg: #1a1a1e;
+        --card-border: #2a2a30;
+        --accent: #748ffc;
+        --input-bg: #14141a;
+        --good: #51cf66;
+        --bad: #ff6b6b;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0 auto;
+      max-width: 920px;
+      padding: 1.5rem;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.6;
+    }
+    .back { display: inline-block; margin-bottom: 1rem; color: var(--muted); text-decoration: none; }
+    .back:hover { text-decoration: underline; color: var(--accent); }
+    h1 { margin-bottom: 0.25rem; letter-spacing: -0.02em; }
+    .subtitle { color: var(--muted); margin-top: 0; }
+    .panel {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin: 1.5rem 0;
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1rem;
+    }
+    label {
+      display: flex;
+      flex-direction: column;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+    label span.unit { font-size: 0.8rem; }
+    input[type=number] {
+      margin-top: 0.35rem;
+      padding: 0.55rem 0.75rem;
+      font-size: 1rem;
+      background: var(--input-bg);
+      color: var(--fg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      font-variant-numeric: tabular-nums;
+    }
+    input[type=number]:focus { outline: none; border-color: var(--accent); }
+    .results {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 0.4rem 1.5rem;
+      font-variant-numeric: tabular-nums;
+    }
+    .results .key { color: var(--muted); }
+    .results .val { font-weight: 600; }
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.6rem;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.85rem;
+    }
+    .badge.good { background: rgba(47, 158, 68, 0.15); color: var(--good); }
+    .badge.bad { background: rgba(224, 49, 49, 0.15); color: var(--bad); }
+    canvas { width: 100%; height: auto; display: block; background: var(--input-bg); border-radius: 8px; }
+    .links a { display: inline-block; margin-right: 1rem; color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+    .links a:hover { text-decoration: underline; }
+    .formula {
+      background: var(--card-bg);
+      border-left: 3px solid var(--accent);
+      padding: 0.75rem 1rem;
+      margin: 0.75rem 0;
+      font-size: 0.9rem;
+    }
+    footer { margin-top: 2rem; color: var(--muted); font-size: 0.85rem; text-align: center; }
+  </style>
+</head>
+<body>
+  <a class="back" href="../">← Home</a>
+  <h1>V-b Curve</h1>
+  <p class="subtitle">Symmetric step-index slab waveguide. Single-mode condition: V &lt; π/2.</p>
+
+  <div class="panel">
+    <div class="form-grid">
+      <label>
+        Wavelength <span class="unit">(μm)</span>
+        <input type="number" id="wl" value="1.55" step="0.01" min="0.21" max="6.7" />
+      </label>
+      <label>
+        Core thickness d <span class="unit">(μm)</span>
+        <input type="number" id="d" value="5.0" step="0.1" min="0.01" />
+      </label>
+      <label>
+        Δ <span class="unit">(%)</span>
+        <input type="number" id="delta" value="0.75" step="0.05" min="0.001" max="50" />
+      </label>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="results">
+      <div class="key">n_core (Sellmeier)</div><div class="val" id="nCore">—</div>
+      <div class="key">n_clad</div><div class="val" id="nClad">—</div>
+      <div class="key">V (operating)</div><div class="val" id="vop">—</div>
+      <div class="key">V cutoff (TE_1)</div><div class="val">π/2 ≈ 1.5708</div>
+      <div class="key">b (fundamental TE_0)</div><div class="val" id="b0">—</div>
+      <div class="key">Single mode?</div><div class="val"><span id="singleBadge" class="badge">—</span></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <canvas id="chart" width="880" height="480"></canvas>
+  </div>
+
+  <h2>Equations</h2>
+  <div class="formula">
+    V = (k₀·a)·√(n_core² − n_clad²),&nbsp;&nbsp; a = d/2,&nbsp;&nbsp; k₀ = 2π/λ
+  </div>
+  <div class="formula">
+    b = (n_eff² − n_clad²) / (n_core² − n_clad²) ∈ [0, 1]
+  </div>
+  <div class="formula">
+    Cutoff for TE_m: V_c = m·π/2.&nbsp; Single-mode region: <strong>V &lt; π/2</strong>.
+  </div>
+
+  <h2>Reference implementations</h2>
+  <p class="links">
+    <a href="https://github.com/chaktb/pic-project/blob/main/vb_curve.py">vb_curve.py</a>
+    <a href="https://github.com/chaktb/pic-project/blob/main/VBCurveCalculator.java">VBCurveCalculator.java</a>
+  </p>
+
+  <footer>Inline JavaScript implementation matches the Python and Java versions in the repo.</footer>
+
+  <script>
+    // --- math ---
+    function nSilica(wl) {
+      const B1=0.6961663,B2=0.4079426,B3=0.8974794;
+      const C1=0.0684043**2,C2=0.1162414**2,C3=9.896161**2;
+      const l2=wl*wl;
+      return Math.sqrt(1+B1*l2/(l2-C1)+B2*l2/(l2-C2)+B3*l2/(l2-C3));
+    }
+    function bForMode(V, m) {
+      const Vc = m * Math.PI / 2;
+      if (V <= Vc) return null;
+      const even = (m % 2 === 0);
+      const uMin = Math.max(Vc + 1e-9, 1e-9);
+      const uMax = Math.min((m+1) * Math.PI / 2 - 1e-9, V - 1e-12);
+      if (uMax <= uMin) return null;
+      const f = (u) => {
+        const w = Math.sqrt(Math.max(V*V - u*u, 0));
+        return even ? (u * Math.tan(u) - w) : (-u / Math.tan(u) - w);
+      };
+      let lo = uMin, hi = uMax;
+      let flo = f(lo), fhi = f(hi);
+      if (flo * fhi > 0) return null;
+      for (let i = 0; i < 100; i++) {
+        const mid = 0.5 * (lo + hi);
+        const fmid = f(mid);
+        if (flo * fmid <= 0) { hi = mid; fhi = fmid; }
+        else { lo = mid; flo = fmid; }
+        if (hi - lo < 1e-12) break;
+      }
+      const u = 0.5 * (lo + hi);
+      const w = Math.sqrt(Math.max(V*V - u*u, 0));
+      return (w / V) ** 2;
+    }
+    function operatingV(wl, d, nCore, nClad) {
+      if (nCore <= nClad) return 0;
+      const k0 = 2 * Math.PI / wl;
+      const a = d / 2;
+      return k0 * a * Math.sqrt(nCore*nCore - nClad*nClad);
+    }
+
+    // --- chart ---
+    const MODE_COLORS = ["#e03131", "#1971c2", "#2f9e44", "#f08c00"]; // red, blue, green, orange
+
+    function drawChart(Vop) {
+      const canvas = document.getElementById('chart');
+      const dpr = window.devicePixelRatio || 1;
+      const cssW = canvas.clientWidth || 880;
+      const cssH = 440;
+      canvas.width = cssW * dpr;
+      canvas.height = cssH * dpr;
+      canvas.style.height = cssH + 'px';
+      const ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+
+      // axes
+      const margin = { left: 60, right: 20, top: 30, bottom: 50 };
+      const W = cssW - margin.left - margin.right;
+      const H = cssH - margin.top - margin.bottom;
+      const Vmax = Math.max(10, Vop + 2);
+      const xs = (V) => margin.left + (V / Vmax) * W;
+      const ys = (b) => margin.top + (1 - b) * H;
+
+      const fg = getComputedStyle(document.documentElement).getPropertyValue('--fg').trim() || '#000';
+      const muted = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim() || '#666';
+      const border = getComputedStyle(document.documentElement).getPropertyValue('--card-border').trim() || '#ddd';
+
+      // single-mode region shading
+      ctx.fillStyle = 'rgba(47, 158, 68, 0.10)';
+      ctx.fillRect(xs(0), margin.top, xs(Math.PI/2) - xs(0), H);
+
+      // grid
+      ctx.strokeStyle = border;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.font = '12px -apple-system, sans-serif';
+      ctx.fillStyle = muted;
+      // X ticks
+      for (let v = 0; v <= Vmax; v += 1) {
+        ctx.beginPath();
+        ctx.moveTo(xs(v), margin.top);
+        ctx.lineTo(xs(v), margin.top + H);
+        ctx.stroke();
+        ctx.fillText(v.toString(), xs(v) - 4, margin.top + H + 14);
+      }
+      // Y ticks
+      for (let b = 0; b <= 1; b += 0.2) {
+        ctx.beginPath();
+        ctx.moveTo(margin.left, ys(b));
+        ctx.lineTo(margin.left + W, ys(b));
+        ctx.stroke();
+        ctx.fillText(b.toFixed(1), margin.left - 28, ys(b) + 4);
+      }
+      ctx.setLineDash([]);
+
+      // axes (solid)
+      ctx.strokeStyle = fg;
+      ctx.beginPath();
+      ctx.moveTo(margin.left, margin.top);
+      ctx.lineTo(margin.left, margin.top + H);
+      ctx.lineTo(margin.left + W, margin.top + H);
+      ctx.stroke();
+      // axis labels
+      ctx.fillStyle = fg;
+      ctx.font = '13px -apple-system, sans-serif';
+      ctx.fillText('V', margin.left + W - 10, margin.top + H + 35);
+      ctx.save();
+      ctx.translate(15, margin.top + H/2);
+      ctx.rotate(-Math.PI/2);
+      ctx.fillText('b', 0, 0);
+      ctx.restore();
+
+      // single-mode label
+      ctx.fillStyle = '#2f9e44';
+      ctx.font = '11px -apple-system, sans-serif';
+      ctx.fillText('single mode', xs(0) + 4, margin.top + 14);
+
+      // cutoff vertical lines (V = m*pi/2)
+      for (let m = 1; m <= 4; m++) {
+        const Vc = m * Math.PI / 2;
+        if (Vc > Vmax) break;
+        ctx.strokeStyle = muted;
+        ctx.setLineDash([2, 4]);
+        ctx.beginPath();
+        ctx.moveTo(xs(Vc), margin.top);
+        ctx.lineTo(xs(Vc), margin.top + H);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = muted;
+        ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillText(`V_c=${(m).toString()}π/2`, xs(Vc) + 3, margin.top + 28 + (m-1)*12);
+      }
+
+      // mode curves
+      const N = 400;
+      for (let m = 0; m < 4; m++) {
+        ctx.strokeStyle = MODE_COLORS[m];
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        let started = false;
+        for (let i = 0; i <= N; i++) {
+          const V = (i / N) * Vmax;
+          if (V <= 0.01) continue;
+          const b = bForMode(V, m);
+          if (b === null) { started = false; continue; }
+          if (!started) { ctx.moveTo(xs(V), ys(b)); started = true; }
+          else ctx.lineTo(xs(V), ys(b));
+        }
+        ctx.stroke();
+      }
+
+      // legend
+      const legendX = margin.left + W - 80;
+      const legendY = margin.top + 10;
+      ctx.font = '12px -apple-system, sans-serif';
+      for (let m = 0; m < 4; m++) {
+        ctx.fillStyle = MODE_COLORS[m];
+        ctx.fillRect(legendX, legendY + m*16 - 8, 12, 3);
+        ctx.fillStyle = fg;
+        ctx.fillText(`TE_${m}`, legendX + 18, legendY + m*16 - 2);
+      }
+
+      // operating point marker
+      if (Vop > 0 && Vop <= Vmax) {
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.moveTo(xs(Vop), margin.top);
+        ctx.lineTo(xs(Vop), margin.top + H);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        const b0 = bForMode(Vop, 0);
+        if (b0 !== null) {
+          ctx.fillStyle = '#000';
+          ctx.beginPath();
+          ctx.arc(xs(Vop), ys(b0), 5, 0, 2*Math.PI);
+          ctx.fill();
+          ctx.fillStyle = fg;
+          ctx.font = 'bold 12px -apple-system, sans-serif';
+          ctx.fillText(`V_op=${Vop.toFixed(2)}`, xs(Vop) + 8, margin.top + 14);
+        }
+      }
+    }
+
+    // --- update on input ---
+    function compute() {
+      const wl = parseFloat(document.getElementById('wl').value);
+      const d  = parseFloat(document.getElementById('d').value);
+      const dl = parseFloat(document.getElementById('delta').value);
+      const fmt = (x) => Number.isFinite(x) ? x.toFixed(6) : '—';
+
+      if (![wl, d, dl].every(Number.isFinite) || wl <= 0 || d <= 0 || dl <= 0) {
+        return;
+      }
+
+      const nCore = nSilica(wl);
+      const nClad = nCore * (1 - dl/100);
+      const Vop = operatingV(wl, d, nCore, nClad);
+      const b0 = bForMode(Vop, 0);
+      const single = Vop < Math.PI / 2;
+
+      document.getElementById('nCore').textContent = fmt(nCore);
+      document.getElementById('nClad').textContent = fmt(nClad);
+      document.getElementById('vop').textContent = Vop.toFixed(4);
+      document.getElementById('b0').textContent = b0 === null ? '—' : b0.toFixed(4);
+      const badge = document.getElementById('singleBadge');
+      badge.textContent = single ? 'YES (V < π/2)' : 'NO (multi mode)';
+      badge.className = 'badge ' + (single ? 'good' : 'bad');
+
+      drawChart(Vop);
+    }
+
+    ['wl','d','delta'].forEach(id => {
+      document.getElementById(id).addEventListener('input', compute);
+    });
+    window.addEventListener('resize', compute);
+    compute();
+  </script>
+</body>
+</html>
