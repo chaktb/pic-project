@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Directional Coupler</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #ffffff;
+      --fg: #1a1a1a;
+      --muted: #666;
+      --card-bg: #f7f7f9;
+      --card-border: #e1e1e6;
+      --accent: #3b5bdb;
+      --input-bg: #ffffff;
+      --through: #1971c2;
+      --cross: #e03131;
+      --core: #4263eb;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0e0e10;
+        --fg: #e8e8ea;
+        --muted: #9a9aa3;
+        --card-bg: #1a1a1e;
+        --card-border: #2a2a30;
+        --accent: #748ffc;
+        --input-bg: #14141a;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0 auto; max-width: 920px; padding: 1.5rem;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg); color: var(--fg); line-height: 1.6;
+    }
+    .back { display: inline-block; margin-bottom: 1rem; color: var(--muted); text-decoration: none; }
+    .back:hover { text-decoration: underline; color: var(--accent); }
+    h1 { margin-bottom: 0.25rem; letter-spacing: -0.02em; }
+    .subtitle { color: var(--muted); margin-top: 0; }
+    .panel {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0;
+    }
+    .form-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem;
+    }
+    label { display: flex; flex-direction: column; font-size: 0.9rem; color: var(--muted); }
+    label span.unit { font-size: 0.8rem; }
+    input[type=number] {
+      margin-top: 0.35rem; padding: 0.55rem 0.75rem; font-size: 1rem;
+      background: var(--input-bg); color: var(--fg); border: 1px solid var(--card-border);
+      border-radius: 8px; font-variant-numeric: tabular-nums;
+    }
+    input[type=number]:focus { outline: none; border-color: var(--accent); }
+    .results {
+      display: grid; grid-template-columns: 1fr auto;
+      gap: 0.4rem 1.5rem; font-variant-numeric: tabular-nums;
+    }
+    .results .key { color: var(--muted); }
+    .results .val { font-weight: 600; }
+    .results .val.primary { color: var(--accent); font-size: 1.1rem; }
+    canvas { width: 100%; display: block; background: var(--input-bg); border-radius: 8px; }
+    .links a { display: inline-block; margin-right: 1rem; color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+    .links a:hover { text-decoration: underline; }
+    .formula {
+      background: var(--card-bg); border-left: 3px solid var(--accent);
+      padding: 0.75rem 1rem; margin: 0.75rem 0; font-size: 0.9rem;
+    }
+    footer { margin-top: 2rem; color: var(--muted); font-size: 0.85rem; text-align: center; }
+  </style>
+</head>
+<body>
+  <a class="back" href="../">← Home</a>
+  <h1>Directional Coupler</h1>
+  <p class="subtitle">Two parallel waveguides — coupling coefficient, transfer length, power split.</p>
+
+  <div class="panel">
+    <div class="form-grid">
+      <label>Wavelength <span class="unit">(μm)</span>
+        <input type="number" id="wl" value="1.55" step="0.01" min="0.21" max="6.7" /></label>
+      <label>WG width W <span class="unit">(μm)</span>
+        <input type="number" id="W" value="5.0" step="0.1" min="0.05" /></label>
+      <label>WG height H <span class="unit">(μm)</span>
+        <input type="number" id="H" value="5.0" step="0.1" min="0.05" /></label>
+      <label>Δ <span class="unit">(%)</span>
+        <input type="number" id="delta" value="0.75" step="0.05" min="0.001" max="50" /></label>
+      <label>Gap <span class="unit">(μm)</span>
+        <input type="number" id="gap" value="3.0" step="0.5" min="0.1" /></label>
+      <label>L_DC <span class="unit">(μm)</span>
+        <input type="number" id="L" value="200" step="10" min="0.1" /></label>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="results">
+      <div class="key">n_core (Sellmeier)</div><div class="val" id="nCore">—</div>
+      <div class="key">n_clad</div><div class="val" id="nClad">—</div>
+      <div class="key">n_eff (total)</div><div class="val" id="nEff">—</div>
+      <div class="key">κ_x, γ_x (slab)</div><div class="val" id="kxgx">—</div>
+      <div class="key">κ (coupling)</div><div class="val" id="kappa">—</div>
+      <div class="key">L_c (full transfer)</div><div class="val" id="Lc">—</div>
+      <div class="key">L_50 (3 dB / 50:50)</div><div class="val" id="L50">—</div>
+      <div class="key">P_cross @ L_DC</div><div class="val primary" id="Pcross">—</div>
+      <div class="key">P_through @ L_DC</div><div class="val primary" id="Pthr">—</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <p style="color: var(--muted); margin-top: 0;">Top: schematic of the coupler (not to scale). Bottom: power transfer along z.</p>
+    <canvas id="schematic" height="180"></canvas>
+    <div style="height: 12px;"></div>
+    <canvas id="chart" height="320"></canvas>
+  </div>
+
+  <h2>Equations</h2>
+  <div class="formula">
+    κ = 2·κ_x²·γ_x·exp(−γ_x·gap) / [β·(κ_x²+γ_x²)·(1+γ_x·a)],&nbsp; a = W/2
+  </div>
+  <div class="formula">
+    L_c = π/(2κ),&nbsp; L_50 = π/(4κ)
+  </div>
+  <div class="formula">
+    P_cross(z) = sin²(κz),&nbsp; P_through(z) = cos²(κz)
+  </div>
+
+  <h2>Reference implementations</h2>
+  <p class="links">
+    <a href="https://github.com/chaktb/pic-project/blob/main/directional_coupler.py">directional_coupler.py</a>
+    <a href="https://github.com/chaktb/pic-project/blob/main/DirectionalCoupler.java">DirectionalCoupler.java</a>
+  </p>
+
+  <footer>JavaScript matches the Python and Java reference implementations.</footer>
+
+  <script>
+    function nSilica(wl) {
+      const B1=0.6961663,B2=0.4079426,B3=0.8974794;
+      const C1=0.0684043**2,C2=0.1162414**2,C3=9.896161**2;
+      const l2=wl*wl;
+      return Math.sqrt(1+B1*l2/(l2-C1)+B2*l2/(l2-C2)+B3*l2/(l2-C3));
+    }
+    function slabFundamentalTE(wl, d, nC, nCl) {
+      if (nC <= nCl) return null;
+      const k0 = 2*Math.PI/wl, a = d/2;
+      const V = k0*a*Math.sqrt(nC*nC - nCl*nCl);
+      const upper = Math.min(Math.PI/2 - 1e-9, V - 1e-12);
+      if (upper <= 0) return null;
+      const f = (u) => { const w = Math.sqrt(Math.max(V*V - u*u, 0)); return u*Math.tan(u) - w; };
+      let lo = 1e-9, hi = upper, flo = f(lo), fhi = f(hi);
+      if (flo*fhi > 0) return null;
+      for (let i = 0; i < 100; i++) {
+        const mid = 0.5*(lo+hi), fmid = f(mid);
+        if (flo*fmid <= 0) { hi = mid; fhi = fmid; }
+        else { lo = mid; flo = fmid; }
+        if (hi - lo < 1e-13) break;
+      }
+      const u = 0.5*(lo+hi), w = Math.sqrt(Math.max(V*V - u*u, 0));
+      return { kappa: u/a, gamma: w/a, nEff: Math.sqrt(nC*nC - (u/a/k0)**2) };
+    }
+
+    function compute() {
+      const wl  = parseFloat(document.getElementById('wl').value);
+      const W   = parseFloat(document.getElementById('W').value);
+      const H   = parseFloat(document.getElementById('H').value);
+      const dl  = parseFloat(document.getElementById('delta').value);
+      const gap = parseFloat(document.getElementById('gap').value);
+      const L   = parseFloat(document.getElementById('L').value);
+      if (![wl,W,H,dl,gap,L].every(Number.isFinite) ||
+          wl<=0||W<=0||H<=0||dl<=0||gap<=0||L<=0) return;
+
+      const nCore = nSilica(wl);
+      const nClad = nCore * (1 - dl/100);
+      const v = slabFundamentalTE(wl, H, nCore, nClad);
+      if (!v) { setNoMode(); return; }
+      const h = slabFundamentalTE(wl, W, v.nEff, nClad);
+      if (!h) { setNoMode(); return; }
+      const k0 = 2*Math.PI/wl;
+      const beta = h.nEff * k0;
+      const a = W/2;
+      const h2 = h.kappa*h.kappa;
+      const kappa = 2*h2*h.gamma*Math.exp(-h.gamma*gap) / (beta*(h2+h.gamma*h.gamma)*(1+h.gamma*a));
+      const Lc = Math.PI/(2*kappa);
+      const L50 = Math.PI/(4*kappa);
+      const Pc = Math.sin(kappa*L)**2;
+      const Pt = Math.cos(kappa*L)**2;
+
+      document.getElementById('nCore').textContent = nCore.toFixed(6);
+      document.getElementById('nClad').textContent = nClad.toFixed(6);
+      document.getElementById('nEff').textContent  = h.nEff.toFixed(6);
+      document.getElementById('kxgx').textContent  = `${h.kappa.toFixed(4)}, ${h.gamma.toFixed(4)} /μm`;
+      document.getElementById('kappa').textContent = `${kappa.toExponential(4)} /μm  (${(kappa*1000).toFixed(4)} /mm)`;
+      document.getElementById('Lc').textContent    = `${Lc.toFixed(2)} μm  (${(Lc/1000).toFixed(4)} mm)`;
+      document.getElementById('L50').textContent   = `${L50.toFixed(2)} μm  (${(L50/1000).toFixed(4)} mm)`;
+      document.getElementById('Pcross').textContent = `${Pc.toFixed(4)}  (${(-10*Math.log10(Math.max(Pc,1e-30))).toFixed(2)} dB)`;
+      document.getElementById('Pthr').textContent   = `${Pt.toFixed(4)}  (${(-10*Math.log10(Math.max(Pt,1e-30))).toFixed(2)} dB)`;
+
+      drawSchematic(W, gap, L);
+      drawTransfer(kappa, L, Lc, L50);
+    }
+
+    function setNoMode() {
+      ['nEff','kxgx','kappa','Lc','L50','Pcross','Pthr'].forEach(id =>
+        document.getElementById(id).textContent = 'no mode');
+    }
+
+    function drawSchematic(W, gap, L) {
+      const canvas = document.getElementById('schematic');
+      const dpr = window.devicePixelRatio || 1;
+      const cssW = canvas.clientWidth || 880;
+      const cssH = 180;
+      canvas.width = cssW*dpr; canvas.height = cssH*dpr;
+      canvas.style.height = cssH + 'px';
+      const ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+
+      const fg = getComputedStyle(document.documentElement).getPropertyValue('--fg').trim();
+      const muted = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim();
+      const core = getComputedStyle(document.documentElement).getPropertyValue('--core').trim() || '#4263eb';
+
+      const margin = { l: 50, r: 50, t: 30, b: 40 };
+      const Wp = cssW - margin.l - margin.r;
+      const Hp = cssH - margin.t - margin.b;
+      const stubFrac = 0.18;
+      const stubPx = Wp * stubFrac;
+      const couplerPx = Wp - 2*stubPx;
+      const xS = margin.l + stubPx, xE = xS + couplerPx;
+
+      // Y-scale to fit two waveguides + gap with some padding
+      const totalY = 2*W + gap;
+      const sy = (Hp * 0.7) / totalY;
+      const yc = margin.t + Hp/2;
+      // Top WG center at -(gap/2 + W/2), bottom at +(gap/2 + W/2)
+      const yTop = yc - (gap/2 + W/2) * sy;
+      const yBot = yc + (gap/2 + W/2) * sy;
+      const wgPx = W * sy;
+
+      // Coupler region (parallel)
+      ctx.fillStyle = core;
+      ctx.fillRect(xS, yTop - wgPx/2, couplerPx, wgPx);
+      ctx.fillRect(xS, yBot - wgPx/2, couplerPx, wgPx);
+      // Input stubs (left): top WG carries input, bottom WG starts straight too
+      ctx.fillRect(margin.l, yTop - wgPx/2, stubPx, wgPx);
+      ctx.fillRect(margin.l, yBot - wgPx/2, stubPx, wgPx);
+      // Output stubs
+      ctx.fillRect(xE, yTop - wgPx/2, stubPx, wgPx);
+      ctx.fillRect(xE, yBot - wgPx/2, stubPx, wgPx);
+
+      // Labels
+      ctx.fillStyle = fg;
+      ctx.font = '12px -apple-system, sans-serif';
+      ctx.fillText('input →', margin.l + 4, yTop - wgPx/2 - 6);
+      ctx.fillText('through →', xE + 4, yTop - wgPx/2 - 6);
+      ctx.fillText('cross →',   xE + 4, yBot + wgPx/2 + 14);
+
+      // Length annotation L_DC
+      ctx.strokeStyle = muted;
+      const yLab = margin.t + Hp - 6;
+      ctx.beginPath();
+      ctx.moveTo(xS, yLab); ctx.lineTo(xE, yLab);
+      ctx.moveTo(xS, yLab-4); ctx.lineTo(xS, yLab+4);
+      ctx.moveTo(xE, yLab-4); ctx.lineTo(xE, yLab+4);
+      ctx.stroke();
+      ctx.fillStyle = muted;
+      ctx.fillText(`L_DC = ${L.toFixed(1)} μm`, (xS+xE)/2 - 35, yLab - 6);
+
+      // Gap annotation (between the two WGs)
+      const xMid = (xS + xE)/2;
+      ctx.strokeStyle = muted;
+      ctx.beginPath();
+      ctx.moveTo(xMid - 30, yTop + wgPx/2); ctx.lineTo(xMid - 30, yBot - wgPx/2);
+      ctx.moveTo(xMid - 34, yTop + wgPx/2); ctx.lineTo(xMid - 26, yTop + wgPx/2);
+      ctx.moveTo(xMid - 34, yBot - wgPx/2); ctx.lineTo(xMid - 26, yBot - wgPx/2);
+      ctx.stroke();
+      ctx.fillStyle = muted;
+      ctx.fillText(`gap = ${gap} μm`, xMid - 70, yc + 4);
+    }
+
+    function drawTransfer(kappa, L, Lc, L50) {
+      const canvas = document.getElementById('chart');
+      const dpr = window.devicePixelRatio || 1;
+      const cssW = canvas.clientWidth || 880;
+      const cssH = 320;
+      canvas.width = cssW*dpr; canvas.height = cssH*dpr;
+      canvas.style.height = cssH + 'px';
+      const ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+
+      const fg = getComputedStyle(document.documentElement).getPropertyValue('--fg').trim();
+      const muted = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim();
+      const border = getComputedStyle(document.documentElement).getPropertyValue('--card-border').trim();
+
+      const margin = { l: 60, r: 20, t: 20, b: 50 };
+      const Wp = cssW - margin.l - margin.r;
+      const Hp = cssH - margin.t - margin.b;
+
+      // X range: 0 to max(2*Lc, 1.5*L)
+      const xMax = Math.max(2*Lc, 1.5*L, 50);
+      const xs = (z) => margin.l + (z/xMax) * Wp;
+      const ys = (p) => margin.t + (1 - p) * Hp;
+
+      // Grid
+      ctx.strokeStyle = border; ctx.setLineDash([3,3]); ctx.font = '11px -apple-system, sans-serif';
+      ctx.fillStyle = muted;
+      [0, 0.25, 0.5, 0.75, 1.0].forEach(p => {
+        const y = ys(p);
+        ctx.beginPath(); ctx.moveTo(margin.l, y); ctx.lineTo(margin.l + Wp, y); ctx.stroke();
+        ctx.fillText(p.toFixed(2), 24, y + 4);
+      });
+      // X grid (5 ticks)
+      for (let i = 0; i <= 5; i++) {
+        const z = i*xMax/5;
+        const x = xs(z);
+        ctx.beginPath(); ctx.moveTo(x, margin.t); ctx.lineTo(x, margin.t + Hp); ctx.stroke();
+        ctx.fillText(z >= 1000 ? (z/1000).toFixed(2)+'mm' : z.toFixed(0)+'μm', x - 18, margin.t + Hp + 14);
+      }
+      ctx.setLineDash([]);
+
+      // Axes
+      ctx.strokeStyle = fg;
+      ctx.beginPath();
+      ctx.moveTo(margin.l, margin.t); ctx.lineTo(margin.l, margin.t + Hp);
+      ctx.lineTo(margin.l + Wp, margin.t + Hp); ctx.stroke();
+      ctx.fillStyle = fg; ctx.font = '13px -apple-system, sans-serif';
+      ctx.fillText('z', margin.l + Wp - 10, margin.t + Hp + 36);
+      ctx.save();
+      ctx.translate(15, margin.t + Hp/2); ctx.rotate(-Math.PI/2);
+      ctx.fillText('Power', -20, 0); ctx.restore();
+
+      // Curves
+      const N = 600;
+      // P_through (cos^2)
+      ctx.strokeStyle = '#1971c2'; ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i <= N; i++) {
+        const z = i*xMax/N;
+        const p = Math.cos(kappa*z)**2;
+        const x = xs(z), y = ys(p);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      // P_cross (sin^2)
+      ctx.strokeStyle = '#e03131'; ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i <= N; i++) {
+        const z = i*xMax/N;
+        const p = Math.sin(kappa*z)**2;
+        const x = xs(z), y = ys(p);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      // Markers: L_c, L_50, L (current)
+      ctx.font = '10px -apple-system, sans-serif';
+      [['L_50', L50, '#2f9e44'], ['L_c', Lc, '#f08c00'], ['L_DC', L, '#000000']].forEach(([lbl, val, color]) => {
+        if (val < 0 || val > xMax) return;
+        ctx.strokeStyle = color; ctx.setLineDash([4, 3]);
+        ctx.beginPath(); ctx.moveTo(xs(val), margin.t); ctx.lineTo(xs(val), margin.t + Hp); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = color;
+        ctx.fillText(`${lbl}=${val.toFixed(0)}`, xs(val) + 3, margin.t + 12 + (lbl==='L_DC' ? 24 : lbl==='L_c' ? 12 : 0));
+      });
+
+      // Legend
+      const lx = margin.l + Wp - 110, ly = margin.t + 14;
+      ctx.fillStyle = '#1971c2'; ctx.fillRect(lx, ly - 8, 14, 3);
+      ctx.fillStyle = fg; ctx.fillText('P_through', lx + 18, ly - 2);
+      ctx.fillStyle = '#e03131'; ctx.fillRect(lx, ly + 8, 14, 3);
+      ctx.fillStyle = fg; ctx.fillText('P_cross', lx + 18, ly + 14);
+    }
+
+    ['wl','W','H','delta','gap','L'].forEach(id => {
+      document.getElementById(id).addEventListener('input', compute);
+    });
+    window.addEventListener('resize', compute);
+    compute();
+  </script>
+</body>
+</html>
