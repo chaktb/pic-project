@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>M x N MMI Coupler Designer</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #ffffff;
+      --fg: #1a1a1a;
+      --muted: #666;
+      --card-bg: #f7f7f9;
+      --card-border: #e1e1e6;
+      --accent: #3b5bdb;
+      --input-bg: #ffffff;
+      --core: #748ffc;
+      --mmi: #ffd43b;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0e0e10;
+        --fg: #e8e8ea;
+        --muted: #9a9aa3;
+        --card-bg: #1a1a1e;
+        --card-border: #2a2a30;
+        --accent: #748ffc;
+        --input-bg: #14141a;
+        --core: #4263eb;
+        --mmi: #b69200;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0 auto; max-width: 920px; padding: 1.5rem;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg); color: var(--fg); line-height: 1.6;
+    }
+    .back { display: inline-block; margin-bottom: 1rem; color: var(--muted); text-decoration: none; }
+    .back:hover { text-decoration: underline; color: var(--accent); }
+    h1 { margin-bottom: 0.25rem; letter-spacing: -0.02em; }
+    .subtitle { color: var(--muted); margin-top: 0; }
+    .panel {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0;
+    }
+    .form-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem;
+    }
+    label { display: flex; flex-direction: column; font-size: 0.9rem; color: var(--muted); }
+    label span.unit { font-size: 0.8rem; }
+    input[type=number] {
+      margin-top: 0.35rem; padding: 0.55rem 0.75rem; font-size: 1rem;
+      background: var(--input-bg); color: var(--fg); border: 1px solid var(--card-border);
+      border-radius: 8px; font-variant-numeric: tabular-nums;
+    }
+    input[type=number]:focus { outline: none; border-color: var(--accent); }
+    .results {
+      display: grid; grid-template-columns: 1fr auto;
+      gap: 0.4rem 1.5rem; font-variant-numeric: tabular-nums;
+    }
+    .results .key { color: var(--muted); }
+    .results .val { font-weight: 600; }
+    .results .val.primary { color: var(--accent); font-size: 1.1rem; }
+    canvas { width: 100%; height: 360px; display: block; background: var(--input-bg); border-radius: 8px; }
+    .links a { display: inline-block; margin-right: 1rem; color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+    .links a:hover { text-decoration: underline; }
+    .formula {
+      background: var(--card-bg); border-left: 3px solid var(--accent);
+      padding: 0.75rem 1rem; margin: 0.75rem 0; font-size: 0.9rem;
+    }
+    footer { margin-top: 2rem; color: var(--muted); font-size: 0.85rem; text-align: center; }
+  </style>
+</head>
+<body>
+  <a class="back" href="../">← Home</a>
+  <h1>M × N MMI Coupler</h1>
+  <p class="subtitle">Self-imaging design (general interference). Length and width from waveguide spec, ports per side, and gap.</p>
+
+  <div class="panel">
+    <div class="form-grid">
+      <label>Wavelength <span class="unit">(μm)</span>
+        <input type="number" id="wl" value="1.55" step="0.01" min="0.21" max="6.7" /></label>
+      <label>WG width W <span class="unit">(μm)</span>
+        <input type="number" id="W" value="5.0" step="0.1" min="0.05" /></label>
+      <label>WG height H <span class="unit">(μm)</span>
+        <input type="number" id="H" value="5.0" step="0.1" min="0.05" /></label>
+      <label>Δ <span class="unit">(%)</span>
+        <input type="number" id="delta" value="0.75" step="0.05" min="0.001" max="50" /></label>
+      <label>Inputs M
+        <input type="number" id="M" value="2" step="1" min="1" max="32" /></label>
+      <label>Outputs N
+        <input type="number" id="N" value="2" step="1" min="1" max="32" /></label>
+      <label>Gap <span class="unit">(μm)</span>
+        <input type="number" id="gap" value="5.0" step="0.5" min="0" /></label>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="results">
+      <div class="key">n_core (Sellmeier)</div><div class="val" id="nCore">—</div>
+      <div class="key">n_clad</div><div class="val" id="nClad">—</div>
+      <div class="key">pitch (= W + gap)</div><div class="val" id="pitch">—</div>
+      <div class="key">W_MMI</div><div class="val primary" id="WMMI">—</div>
+      <div class="key">W_eff (Goos-Hänchen)</div><div class="val" id="We">—</div>
+      <div class="key">L_π (beat length)</div><div class="val" id="Lpi">—</div>
+      <div class="key">L_MMI</div><div class="val primary" id="LMMI">—</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <p style="color: var(--muted); margin-top: 0;">
+      Top-down schematic. Length (x) and width (y) use independent scales — actual aspect ratio is L_MMI ≫ W_MMI for low-Δ designs.
+    </p>
+    <canvas id="chart"></canvas>
+  </div>
+
+  <h2>Equations</h2>
+  <div class="formula">
+    pitch = W + gap,&nbsp; W_MMI = max(M, N) · pitch
+  </div>
+  <div class="formula">
+    W_e = W_MMI + (λ/π) · (n_clad/n_core)<sup>2σ</sup> / √(n_core² − n_clad²),&nbsp; σ = 0 (TE)
+  </div>
+  <div class="formula">
+    L_π = 4 · n_core · W_e² / (3 · λ),&nbsp; L_MMI = 3 · L_π / N (general interference)
+  </div>
+
+  <h2>Reference implementations</h2>
+  <p class="links">
+    <a href="https://github.com/chaktb/pic-project/blob/main/mmi_coupler.py">mmi_coupler.py</a>
+    <a href="https://github.com/chaktb/pic-project/blob/main/MMICoupler.java">MMICoupler.java</a>
+  </p>
+
+  <footer>JavaScript matches the Python and Java reference implementations.</footer>
+
+  <script>
+    function nSilica(wl) {
+      const B1=0.6961663,B2=0.4079426,B3=0.8974794;
+      const C1=0.0684043**2,C2=0.1162414**2,C3=9.896161**2;
+      const l2=wl*wl;
+      return Math.sqrt(1+B1*l2/(l2-C1)+B2*l2/(l2-C2)+B3*l2/(l2-C3));
+    }
+
+    function design(wl, Wwg, H, dl, M, N, gap, sigma=0) {
+      const nCore = nSilica(wl);
+      const nClad = nCore * (1 - dl/100);
+      const Nmax = Math.max(M, N);
+      const pitch = Wwg + gap;
+      const WMMI = Nmax * pitch;
+      const We = WMMI + (wl/Math.PI) * Math.pow(nClad/nCore, 2*sigma) / Math.sqrt(nCore*nCore - nClad*nClad);
+      const Lpi = 4 * nCore * We*We / (3 * wl);
+      const LMMI = 3 * Lpi / N;
+      const y0 = -(Nmax - 1)/2 * pitch;
+      const inPorts  = Array.from({length: M}, (_, i) => y0 + (Nmax-M)/2*pitch + i*pitch);
+      const outPorts = Array.from({length: N}, (_, i) => y0 + (Nmax-N)/2*pitch + i*pitch);
+      return { nCore, nClad, pitch, WMMI, We, Lpi, LMMI, inPorts, outPorts };
+    }
+
+    function compute() {
+      const wl  = parseFloat(document.getElementById('wl').value);
+      const W   = parseFloat(document.getElementById('W').value);
+      const H   = parseFloat(document.getElementById('H').value);
+      const dl  = parseFloat(document.getElementById('delta').value);
+      const M   = parseInt(document.getElementById('M').value);
+      const N   = parseInt(document.getElementById('N').value);
+      const gap = parseFloat(document.getElementById('gap').value);
+      if (![wl,W,H,dl,gap].every(Number.isFinite) || !Number.isInteger(M) || !Number.isInteger(N) ||
+          wl<=0 || W<=0 || H<=0 || dl<=0 || gap<0 || M<1 || N<1) return;
+
+      const r = design(wl, W, H, dl, M, N, gap);
+
+      const fmt = (x, n=4) => x.toFixed(n);
+      document.getElementById('nCore').textContent = fmt(r.nCore, 6);
+      document.getElementById('nClad').textContent = fmt(r.nClad, 6);
+      document.getElementById('pitch').textContent = fmt(r.pitch) + ' μm';
+      document.getElementById('WMMI').textContent  = fmt(r.WMMI) + ' μm';
+      document.getElementById('We').textContent    = fmt(r.We) + ' μm';
+      document.getElementById('Lpi').textContent   = fmt(r.Lpi) + ' μm  (' + (r.Lpi/1000).toFixed(4) + ' mm)';
+      document.getElementById('LMMI').textContent  = fmt(r.LMMI) + ' μm  (' + (r.LMMI/1000).toFixed(4) + ' mm)';
+
+      drawSchematic(r, W);
+    }
+
+    function drawSchematic(r, Wwg) {
+      const canvas = document.getElementById('chart');
+      const dpr = window.devicePixelRatio || 1;
+      const cssW = canvas.clientWidth || 880;
+      const cssH = 360;
+      canvas.width = cssW*dpr; canvas.height = cssH*dpr;
+      canvas.style.height = cssH + 'px';
+      const ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+
+      const fg = getComputedStyle(document.documentElement).getPropertyValue('--fg').trim();
+      const muted = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim();
+      const mmiCol = getComputedStyle(document.documentElement).getPropertyValue('--mmi').trim();
+      const coreCol = getComputedStyle(document.documentElement).getPropertyValue('--core').trim();
+
+      // Stub waveguide visual length (independent of L_MMI scale)
+      const stubLen = 200; // device-units (drawing units, not μm)
+      const margin = { l: 50, r: 50, t: 30, b: 50 };
+      const Wp = cssW - margin.l - margin.r;
+      const Hp = cssH - margin.t - margin.b;
+
+      // Y scale: fits W_MMI plus stub waveguides outside ports (small overshoot)
+      const yPad = r.WMMI * 0.1;
+      const yRange = r.WMMI + 2*yPad;
+      const sy = Hp / yRange;
+
+      // X scale: layout = stub + L_MMI(scaled) + stub
+      // Pick x scale so total width fits canvas
+      // Stub takes a fraction; L_MMI takes the rest; show actual scale ratio is annotated
+      const stubFrac = 0.15;
+      const stubPx = Wp * stubFrac;
+      const mmiPx = Wp - 2*stubPx;
+      const sxMmi = mmiPx / r.LMMI; // px per μm for the MMI body (large stretch)
+
+      const xMmiStart = margin.l + stubPx;
+      const xMmiEnd   = xMmiStart + mmiPx;
+      const yCenter   = margin.t + Hp/2;
+      const yToPx = (y) => yCenter + y * sy;
+
+      // Draw input stub waveguides (left side)
+      ctx.fillStyle = coreCol;
+      r.inPorts.forEach(y => {
+        ctx.fillRect(margin.l, yToPx(y) - (Wwg/2)*sy, stubPx, Wwg*sy);
+      });
+      // Output stub waveguides (right side)
+      r.outPorts.forEach(y => {
+        ctx.fillRect(xMmiEnd, yToPx(y) - (Wwg/2)*sy, stubPx, Wwg*sy);
+      });
+
+      // MMI body
+      ctx.fillStyle = mmiCol;
+      ctx.globalAlpha = 0.5;
+      ctx.fillRect(xMmiStart, yToPx(-r.WMMI/2), mmiPx, r.WMMI*sy);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = fg;
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(xMmiStart, yToPx(-r.WMMI/2), mmiPx, r.WMMI*sy);
+
+      // Annotations
+      ctx.fillStyle = fg;
+      ctx.font = '12px -apple-system, sans-serif';
+      // L_MMI label (length, with arrows)
+      const yLab = margin.t + Hp - 14;
+      ctx.beginPath();
+      ctx.moveTo(xMmiStart, yLab); ctx.lineTo(xMmiEnd, yLab);
+      ctx.moveTo(xMmiStart, yLab-4); ctx.lineTo(xMmiStart, yLab+4);
+      ctx.moveTo(xMmiEnd, yLab-4); ctx.lineTo(xMmiEnd, yLab+4);
+      ctx.strokeStyle = muted; ctx.stroke();
+      ctx.fillStyle = muted;
+      ctx.fillText(`L_MMI = ${r.LMMI.toFixed(1)} μm (${(r.LMMI/1000).toFixed(3)} mm)`,
+                   (xMmiStart + xMmiEnd)/2 - 70, yLab - 6);
+
+      // W_MMI label (width)
+      const xLab = xMmiEnd + 12;
+      ctx.beginPath();
+      ctx.moveTo(xLab, yToPx(-r.WMMI/2)); ctx.lineTo(xLab, yToPx(r.WMMI/2));
+      ctx.moveTo(xLab-4, yToPx(-r.WMMI/2)); ctx.lineTo(xLab+4, yToPx(-r.WMMI/2));
+      ctx.moveTo(xLab-4, yToPx(r.WMMI/2)); ctx.lineTo(xLab+4, yToPx(r.WMMI/2));
+      ctx.strokeStyle = muted; ctx.stroke();
+      ctx.save();
+      ctx.translate(xLab + 8, yCenter);
+      ctx.rotate(-Math.PI/2);
+      ctx.fillText(`W_MMI = ${r.WMMI.toFixed(1)} μm`, -50, 0);
+      ctx.restore();
+
+      // M/N labels
+      ctx.font = 'bold 12px -apple-system, sans-serif';
+      ctx.fillStyle = fg;
+      ctx.fillText(`M = ${r.inPorts.length}`, margin.l - 8, margin.t + 16);
+      ctx.fillText(`N = ${r.outPorts.length}`, xMmiEnd + 22, margin.t + 16);
+
+      // Scale warning
+      ctx.font = '10px -apple-system, sans-serif';
+      ctx.fillStyle = muted;
+      const ratio = (r.LMMI / r.WMMI).toFixed(1);
+      ctx.fillText(`(actual aspect L:W = ${ratio}:1, drawing not to scale)`,
+                   margin.l, margin.t + 12);
+    }
+
+    ['wl','W','H','delta','M','N','gap'].forEach(id => {
+      document.getElementById(id).addEventListener('input', compute);
+    });
+    window.addEventListener('resize', compute);
+    compute();
+  </script>
+</body>
+</html>
