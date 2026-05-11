@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MZI Optimization (WDM target)</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #ffffff;
+      --fg: #1a1a1a;
+      --muted: #666;
+      --card-bg: #f7f7f9;
+      --card-border: #e1e1e6;
+      --accent: #3b5bdb;
+      --input-bg: #ffffff;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0e0e10;
+        --fg: #e8e8ea;
+        --muted: #9a9aa3;
+        --card-bg: #1a1a1e;
+        --card-border: #2a2a30;
+        --accent: #748ffc;
+        --input-bg: #14141a;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0 auto; max-width: 920px; padding: 1.5rem;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg); color: var(--fg); line-height: 1.6;
+    }
+    .back { display: inline-block; margin-bottom: 1rem; color: var(--muted); text-decoration: none; }
+    .back:hover { text-decoration: underline; color: var(--accent); }
+    h1 { margin-bottom: 0.25rem; letter-spacing: -0.02em; }
+    .subtitle { color: var(--muted); margin-top: 0; }
+    .panel {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0;
+    }
+    .form-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem;
+    }
+    label { display: flex; flex-direction: column; font-size: 0.9rem; color: var(--muted); }
+    label span.unit { font-size: 0.8rem; }
+    input[type=number] {
+      margin-top: 0.35rem; padding: 0.55rem 0.75rem; font-size: 1rem;
+      background: var(--input-bg); color: var(--fg); border: 1px solid var(--card-border);
+      border-radius: 8px; font-variant-numeric: tabular-nums;
+    }
+    input[type=number]:focus { outline: none; border-color: var(--accent); }
+    button {
+      padding: 0.6rem 1.2rem; font-size: 0.95rem; font-weight: 600;
+      background: var(--accent); color: white; border: none; border-radius: 8px; cursor: pointer;
+      margin-right: 0.5rem;
+    }
+    button:hover { opacity: 0.9; }
+    button.secondary { background: var(--card-bg); color: var(--fg); border: 1px solid var(--card-border); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+    th, td { padding: 0.4rem 0.6rem; text-align: left; border-bottom: 1px solid var(--card-border); }
+    th { color: var(--muted); font-weight: 500; font-size: 0.85rem; }
+    td input[type=number] { width: 100%; padding: 0.35rem 0.5rem; margin: 0; }
+    .results {
+      display: grid; grid-template-columns: 1fr auto;
+      gap: 0.4rem 1.5rem; font-variant-numeric: tabular-nums;
+    }
+    .results .key { color: var(--muted); }
+    .results .val { font-weight: 600; }
+    .results .val.primary { color: var(--accent); font-size: 1.05rem; }
+    canvas { width: 100%; height: 380px; display: block; background: var(--input-bg); border-radius: 8px; }
+    .links a { display: inline-block; margin-right: 1rem; color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+    .links a:hover { text-decoration: underline; }
+    .formula {
+      background: var(--card-bg); border-left: 3px solid var(--accent);
+      padding: 0.75rem 1rem; margin: 0.75rem 0; font-size: 0.9rem;
+    }
+    #status { margin-top: 0.5rem; color: var(--muted); font-size: 0.9rem; min-height: 1.2em; }
+    footer { margin-top: 2rem; color: var(--muted); font-size: 0.85rem; text-align: center; }
+  </style>
+</head>
+<body>
+  <a class="back" href="../">← Home</a>
+  <h1>MZI Optimization</h1>
+  <p class="subtitle">Find DC1, DC2, ΔL parameters that match a target spectrum (e.g., 980/1550 WDM coupler).</p>
+
+  <div class="panel">
+    <h3 style="margin-top:0">Waveguide</h3>
+    <div class="form-grid">
+      <label>WG width W <span class="unit">(μm)</span><input type="number" id="W" value="5.0" step="0.1" min="0.05" /></label>
+      <label>WG height H <span class="unit">(μm)</span><input type="number" id="H" value="5.0" step="0.1" min="0.05" /></label>
+      <label>Δ <span class="unit">(%)</span><input type="number" id="delta" value="0.75" step="0.05" min="0.001" max="50" /></label>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3 style="margin-top:0">Targets</h3>
+    <p style="color: var(--muted); font-size: 0.9rem; margin-top: 0;">
+      Each row: at this wavelength, want P_bar = target (weight scales the cost contribution).
+    </p>
+    <table id="targets">
+      <thead><tr><th>λ (μm)</th><th>P_bar target</th><th>Weight</th><th></th></tr></thead>
+      <tbody id="targetBody"></tbody>
+    </table>
+    <div style="margin-top: 0.75rem;">
+      <button class="secondary" id="btnAdd">+ add row</button>
+      <button class="secondary" id="btnPreset980">Preset: 980/1550 WDM</button>
+      <button class="secondary" id="btnPreset1310">Preset: 1310/1550 WDM</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3 style="margin-top:0">Bounds</h3>
+    <div class="form-grid">
+      <label>gap min <span class="unit">(μm)</span><input type="number" id="gMin" value="1" step="0.5" /></label>
+      <label>gap max <span class="unit">(μm)</span><input type="number" id="gMax" value="15" step="0.5" /></label>
+      <label>L min <span class="unit">(μm)</span><input type="number" id="LMin" value="10" step="50" /></label>
+      <label>L max <span class="unit">(μm)</span><input type="number" id="LMax" value="5000" step="50" /></label>
+      <label>ΔL min <span class="unit">(μm)</span><input type="number" id="dLMin" value="0.1" step="1" /></label>
+      <label>ΔL max <span class="unit">(μm)</span><input type="number" id="dLMax" value="200" step="10" /></label>
+      <label>Random starts<input type="number" id="nStarts" value="50" step="10" min="1" max="500" /></label>
+      <label>Seed<input type="number" id="seed" value="1" step="1" /></label>
+    </div>
+    <div style="margin-top: 0.75rem;">
+      <button id="btnRun">Optimize</button>
+      <span id="status"></span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3 style="margin-top:0">Best parameters</h3>
+    <div class="results">
+      <div class="key">DC1 gap</div><div class="val primary" id="rGap1">—</div>
+      <div class="key">DC1 L</div><div class="val primary" id="rL1">—</div>
+      <div class="key">DC2 gap</div><div class="val primary" id="rGap2">—</div>
+      <div class="key">DC2 L</div><div class="val primary" id="rL2">—</div>
+      <div class="key">Path difference ΔL</div><div class="val primary" id="rDL">—</div>
+      <div class="key">Best cost</div><div class="val" id="rCost">—</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3 style="margin-top:0">Spectrum at best parameters</h3>
+    <p style="color: var(--muted); margin-top: 0;">Range auto-set to span all targets. Target points marked.</p>
+    <canvas id="chart"></canvas>
+  </div>
+
+  <h2>Reference implementations</h2>
+  <p class="links">
+    <a href="https://github.com/chaktb/pic-project/blob/main/mzi_optimize.py">mzi_optimize.py</a>
+    <a href="https://github.com/chaktb/pic-project/blob/main/MZIOptimize.java">MZIOptimize.java</a>
+    <a href="../mzi/">→ MZI Spectrum (forward)</a>
+  </p>
+
+  <footer>Multi-start Nelder-Mead in pure JavaScript. Runs in 1–5 s in browser.</footer>
+
+  <script>
+    // ---- physics ----
+    function nSilica(wl) {
+      const B1=0.6961663,B2=0.4079426,B3=0.8974794;
+      const C1=0.0684043**2,C2=0.1162414**2,C3=9.896161**2;
+      const l2=wl*wl;
+      return Math.sqrt(1+B1*l2/(l2-C1)+B2*l2/(l2-C2)+B3*l2/(l2-C3));
+    }
+    function slabFundamentalTE(wl, d, nC, nCl) {
+      if (nC <= nCl) return null;
+      const k0 = 2*Math.PI/wl, a = d/2;
+      const V = k0*a*Math.sqrt(nC*nC - nCl*nCl);
+      const upper = Math.min(Math.PI/2 - 1e-9, V - 1e-12);
+      if (upper <= 0) return null;
+      const f = (u) => { const w = Math.sqrt(Math.max(V*V - u*u, 0)); return u*Math.tan(u) - w; };
+      let lo = 1e-9, hi = upper, flo = f(lo), fhi = f(hi);
+      if (flo*fhi > 0) return null;
+      for (let i = 0; i < 100; i++) {
+        const mid = 0.5*(lo+hi), fmid = f(mid);
+        if (flo*fmid <= 0) { hi = mid; fhi = fmid; }
+        else { lo = mid; flo = fmid; }
+        if (hi - lo < 1e-13) break;
+      }
+      const u = 0.5*(lo+hi), w = Math.sqrt(Math.max(V*V - u*u, 0));
+      return { kappa: u/a, gamma: w/a, nEff: Math.sqrt(nC*nC - (u/a/k0)**2) };
+    }
+    function kappaNeff(wl, W, H, dl, gap) {
+      const nC = nSilica(wl), nCl = nC*(1-dl/100);
+      const v = slabFundamentalTE(wl, H, nC, nCl); if (!v) return null;
+      const h = slabFundamentalTE(wl, W, v.nEff, nCl); if (!h) return null;
+      const k0 = 2*Math.PI/wl, beta = h.nEff*k0, a = W/2, h2 = h.kappa*h.kappa;
+      return { kappa: 2*h2*h.gamma*Math.exp(-h.gamma*gap)/(beta*(h2+h.gamma*h.gamma)*(1+h.gamma*a)), nEff: h.nEff };
+    }
+    function pBar(wl, W, H, dl, g1, L1, g2, L2, dL) {
+      const kn1 = kappaNeff(wl, W, H, dl, g1);
+      const kn2 = kappaNeff(wl, W, H, dl, g2);
+      if (!kn1 || !kn2) return null;
+      const kL1 = kn1.kappa*L1, kL2 = kn2.kappa*L2;
+      const dphi = (2*Math.PI*kn1.nEff/wl) * dL;
+      const a_ = Math.cos(kL1)*Math.cos(kL2);
+      const b_ = Math.sin(kL1)*Math.sin(kL2);
+      return a_*a_ + b_*b_ - 2*a_*b_*Math.cos(dphi);
+    }
+
+    // ---- optimization ----
+    // Mulberry32 RNG for reproducibility
+    function mulberry32(seed) {
+      let s = seed >>> 0;
+      return function() {
+        s = (s + 0x6D2B79F5) >>> 0;
+        let t = s;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+    function nelderMead(f, x0, maxIter=300) {
+      const n = x0.length;
+      let simp = [x0.slice()];
+      for (let i = 0; i < n; i++) {
+        const xi = x0.slice();
+        const step = Math.abs(xi[i]) > 1e-6 ? Math.abs(xi[i])*0.05 : 0.001;
+        xi[i] += step;
+        simp.push(xi);
+      }
+      let fv = simp.map(x => f(x));
+      for (let it = 0; it < maxIter; it++) {
+        const order = [...Array(n+1).keys()].sort((a,b) => fv[a] - fv[b]);
+        simp = order.map(i => simp[i]); fv = order.map(i => fv[i]);
+        if (fv[n] - fv[0] < 1e-10) break;
+        const c = new Array(n).fill(0);
+        for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) c[j] += simp[i][j]/n;
+        const xr = c.map((cj,j) => cj + (cj - simp[n][j]));
+        const fr = f(xr);
+        if (fv[0] <= fr && fr < fv[n-1]) { simp[n] = xr; fv[n] = fr; continue; }
+        if (fr < fv[0]) {
+          const xe = c.map((cj,j) => cj + 2*(xr[j] - cj));
+          const fe = f(xe);
+          if (fe < fr) { simp[n] = xe; fv[n] = fe; } else { simp[n] = xr; fv[n] = fr; }
+          continue;
+        }
+        const xc = c.map((cj,j) => cj + 0.5*(simp[n][j] - cj));
+        const fc = f(xc);
+        if (fc < fv[n]) { simp[n] = xc; fv[n] = fc; continue; }
+        for (let i = 1; i <= n; i++) {
+          simp[i] = simp[0].map((x0j,j) => x0j + 0.5*(simp[i][j] - x0j));
+          fv[i] = f(simp[i]);
+        }
+      }
+      const order = [...Array(n+1).keys()].sort((a,b) => fv[a] - fv[b]);
+      return { x: simp[order[0]], f: fv[order[0]] };
+    }
+
+    function optimize(W, H, dl, targets, bounds, nStarts, seed) {
+      const rng = mulberry32(seed);
+      const clip = (x) => x.map((xi, i) => Math.max(bounds[i][0], Math.min(bounds[i][1], xi)));
+      const cost = (x) => {
+        const xc = clip(x);
+        let penalty = 0;
+        for (let i = 0; i < x.length; i++) {
+          const range = bounds[i][1] - bounds[i][0];
+          penalty += 0.001 * ((x[i] - xc[i]) / Math.max(range, 1e-12)) ** 2;
+        }
+        let s = 0;
+        for (const t of targets) {
+          const p = pBar(t.wl, W, H, dl, xc[0], xc[1], xc[2], xc[3], xc[4]);
+          if (p === null) return 1e6;
+          s += t.weight * (p - t.target) ** 2;
+        }
+        return s + penalty;
+      };
+      let best = null, bestC = Infinity;
+      for (let s = 0; s < nStarts; s++) {
+        const x0 = bounds.map(([lo, hi]) => lo + rng()*(hi - lo));
+        const r = nelderMead(cost, x0, 300);
+        const xc = clip(r.x);
+        const c = cost(xc);
+        if (c < bestC) { bestC = c; best = xc; }
+      }
+      return { params: best, cost: bestC };
+    }
+
+    // ---- UI ----
+    function makeRow(wl='1.55', target='0.0', weight='1') {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input type="number" class="t-wl" value="${wl}" step="0.01" min="0.21" max="6.7" /></td>
+        <td><input type="number" class="t-target" value="${target}" step="0.05" min="0" max="1" /></td>
+        <td><input type="number" class="t-weight" value="${weight}" step="0.5" min="0" /></td>
+        <td><button class="secondary" style="padding:0.3rem 0.6rem">×</button></td>
+      `;
+      tr.querySelector('button').addEventListener('click', () => tr.remove());
+      return tr;
+    }
+    function setTargets(rows) {
+      const tbody = document.getElementById('targetBody');
+      tbody.innerHTML = '';
+      rows.forEach(r => tbody.appendChild(makeRow(r.wl, r.target, r.weight)));
+    }
+    function readTargets() {
+      const out = [];
+      document.querySelectorAll('#targetBody tr').forEach(tr => {
+        const wl = parseFloat(tr.querySelector('.t-wl').value);
+        const target = parseFloat(tr.querySelector('.t-target').value);
+        const weight = parseFloat(tr.querySelector('.t-weight').value);
+        if ([wl, target, weight].every(Number.isFinite) && wl > 0 && weight > 0) {
+          out.push({ wl, target, weight });
+        }
+      });
+      return out;
+    }
+
+    document.getElementById('btnAdd').addEventListener('click', () => {
+      document.getElementById('targetBody').appendChild(makeRow());
+    });
+    document.getElementById('btnPreset980').addEventListener('click', () => {
+      setTargets([
+        { wl: '0.98', target: '1.0', weight: '1' },
+        { wl: '1.55', target: '0.0', weight: '1' },
+      ]);
+    });
+    document.getElementById('btnPreset1310').addEventListener('click', () => {
+      setTargets([
+        { wl: '1.31', target: '1.0', weight: '1' },
+        { wl: '1.55', target: '0.0', weight: '1' },
+      ]);
+    });
+
+    // Default to 980/1550
+    setTargets([
+      { wl: '0.98', target: '1.0', weight: '1' },
+      { wl: '1.55', target: '0.0', weight: '1' },
+    ]);
+
+    document.getElementById('btnRun').addEventListener('click', () => {
+      const btn = document.getElementById('btnRun');
+      const status = document.getElementById('status');
+      btn.disabled = true; status.textContent = 'Optimizing…';
+
+      // Defer to next tick so UI updates
+      setTimeout(() => {
+        const W = parseFloat(document.getElementById('W').value);
+        const H = parseFloat(document.getElementById('H').value);
+        const dl = parseFloat(document.getElementById('delta').value);
+        const targets = readTargets();
+        if (targets.length === 0) {
+          status.textContent = 'Add at least one target.'; btn.disabled = false; return;
+        }
+        const bounds = [
+          [parseFloat(document.getElementById('gMin').value), parseFloat(document.getElementById('gMax').value)],
+          [parseFloat(document.getElementById('LMin').value), parseFloat(document.getElementById('LMax').value)],
+          [parseFloat(document.getElementById('gMin').value), parseFloat(document.getElementById('gMax').value)],
+          [parseFloat(document.getElementById('LMin').value), parseFloat(document.getElementById('LMax').value)],
+          [parseFloat(document.getElementById('dLMin').value), parseFloat(document.getElementById('dLMax').value)],
+        ];
+        const nStarts = Math.max(1, Math.min(500, parseInt(document.getElementById('nStarts').value) || 50));
+        const seed    = parseInt(document.getElementById('seed').value) || 1;
+        const t0 = performance.now();
+        const r = optimize(W, H, dl, targets, bounds, nStarts, seed);
+        const dt = (performance.now() - t0) / 1000;
+
+        document.getElementById('rGap1').textContent = r.params[0].toFixed(4) + ' μm';
+        document.getElementById('rL1').textContent   = r.params[1].toFixed(4) + ' μm';
+        document.getElementById('rGap2').textContent = r.params[2].toFixed(4) + ' μm';
+        document.getElementById('rL2').textContent   = r.params[3].toFixed(4) + ' μm';
+        document.getElementById('rDL').textContent   = r.params[4].toFixed(4) + ' μm';
+        document.getElementById('rCost').textContent = r.cost.toExponential(3);
+
+        status.textContent = `Done in ${dt.toFixed(2)} s. Best cost: ${r.cost.toExponential(3)}.`;
+
+        drawSpectrum(W, H, dl, r.params, targets);
+        btn.disabled = false;
+      }, 30);
+    });
+
+    function drawSpectrum(W, H, dl, params, targets) {
+      const canvas = document.getElementById('chart');
+      const dpr = window.devicePixelRatio || 1;
+      const cssW = canvas.clientWidth || 880;
+      const cssH = 380;
+      canvas.width = cssW*dpr; canvas.height = cssH*dpr;
+      canvas.style.height = cssH + 'px';
+      const ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+      const fg = getComputedStyle(document.documentElement).getPropertyValue('--fg').trim();
+      const muted = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim();
+      const border = getComputedStyle(document.documentElement).getPropertyValue('--card-border').trim();
+
+      const margin = { l: 60, r: 20, t: 20, b: 50 };
+      const Wp = cssW - margin.l - margin.r;
+      const Hp = cssH - margin.t - margin.b;
+
+      const wls_t = targets.map(t => t.wl);
+      const wlMin = Math.min(...wls_t) * 0.95;
+      const wlMax = Math.max(...wls_t) * 1.05;
+      const xs = (wl) => margin.l + ((wl - wlMin) / (wlMax - wlMin)) * Wp;
+      const ys = (p) => margin.t + (1 - p) * Hp;
+
+      ctx.strokeStyle = border; ctx.font = '11px -apple-system, sans-serif';
+      ctx.fillStyle = muted; ctx.setLineDash([3,3]);
+      [0, 0.25, 0.5, 0.75, 1.0].forEach(p => {
+        const y = ys(p);
+        ctx.beginPath(); ctx.moveTo(margin.l, y); ctx.lineTo(margin.l + Wp, y); ctx.stroke();
+        ctx.fillText(p.toFixed(2), 28, y + 4);
+      });
+      for (let i = 0; i <= 5; i++) {
+        const wl = wlMin + (wlMax - wlMin) * i/5;
+        const x = xs(wl);
+        ctx.beginPath(); ctx.moveTo(x, margin.t); ctx.lineTo(x, margin.t + Hp); ctx.stroke();
+        ctx.fillText(wl.toFixed(3), x - 14, margin.t + Hp + 14);
+      }
+      ctx.setLineDash([]);
+      ctx.strokeStyle = fg;
+      ctx.beginPath();
+      ctx.moveTo(margin.l, margin.t); ctx.lineTo(margin.l, margin.t + Hp);
+      ctx.lineTo(margin.l + Wp, margin.t + Hp); ctx.stroke();
+      ctx.fillStyle = fg; ctx.font = '13px -apple-system, sans-serif';
+      ctx.fillText('λ (μm)', margin.l + Wp - 50, margin.t + Hp + 36);
+      ctx.save();
+      ctx.translate(15, margin.t + Hp/2); ctx.rotate(-Math.PI/2);
+      ctx.fillText('Power', -20, 0); ctx.restore();
+
+      const N = 600;
+      // P_bar (blue)
+      ctx.strokeStyle = '#1971c2'; ctx.lineWidth = 2;
+      ctx.beginPath();
+      let started = false;
+      for (let i = 0; i <= N; i++) {
+        const wl = wlMin + (wlMax - wlMin) * i/N;
+        const p = pBar(wl, W, H, dl, params[0], params[1], params[2], params[3], params[4]);
+        if (p === null) { started = false; continue; }
+        const x = xs(wl), y = ys(p);
+        if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      // P_cross (red)
+      ctx.strokeStyle = '#e03131'; ctx.lineWidth = 2;
+      ctx.beginPath();
+      started = false;
+      for (let i = 0; i <= N; i++) {
+        const wl = wlMin + (wlMax - wlMin) * i/N;
+        const p = pBar(wl, W, H, dl, params[0], params[1], params[2], params[3], params[4]);
+        if (p === null) { started = false; continue; }
+        const x = xs(wl), y = ys(1 - p);
+        if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      // Target markers
+      for (const t of targets) {
+        const x = xs(t.wl);
+        ctx.fillStyle = '#000'; ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5;
+        // target P_bar marker
+        const yT = ys(t.target);
+        ctx.beginPath(); ctx.arc(x, yT, 6, 0, 2*Math.PI); ctx.fill();
+        // crosshair
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath(); ctx.moveTo(x, margin.t); ctx.lineTo(x, margin.t + Hp); ctx.stroke();
+        ctx.setLineDash([]);
+        // achieved P_bar marker
+        const pAch = pBar(t.wl, W, H, dl, params[0], params[1], params[2], params[3], params[4]);
+        if (pAch !== null) {
+          const yA = ys(pAch);
+          ctx.fillStyle = t.target > 0.5 ? '#1971c2' : '#e03131';
+          ctx.beginPath(); ctx.arc(x, yA, 4, 0, 2*Math.PI); ctx.fill();
+        }
+        ctx.fillStyle = fg; ctx.font = '10px -apple-system, sans-serif';
+        ctx.fillText(`λ=${t.wl}`, x + 6, margin.t + 12);
+      }
+
+      // Legend
+      const lx = margin.l + Wp - 110, ly = margin.t + 14;
+      ctx.fillStyle = '#1971c2'; ctx.fillRect(lx, ly - 8, 14, 3);
+      ctx.fillStyle = fg; ctx.fillText('P_bar', lx + 18, ly - 2);
+      ctx.fillStyle = '#e03131'; ctx.fillRect(lx, ly + 8, 14, 3);
+      ctx.fillStyle = fg; ctx.fillText('P_cross', lx + 18, ly + 14);
+      ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(lx + 7, ly + 26, 5, 0, 2*Math.PI); ctx.fill();
+      ctx.fillStyle = fg; ctx.fillText('target', lx + 18, ly + 30);
+    }
+  </script>
+</body>
+</html>
