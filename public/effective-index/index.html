@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Effective Index of Silica</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #ffffff;
+      --fg: #1a1a1a;
+      --muted: #666;
+      --card-bg: #f7f7f9;
+      --card-border: #e1e1e6;
+      --accent: #3b5bdb;
+      --input-bg: #ffffff;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0e0e10;
+        --fg: #e8e8ea;
+        --muted: #9a9aa3;
+        --card-bg: #1a1a1e;
+        --card-border: #2a2a30;
+        --accent: #748ffc;
+        --input-bg: #14141a;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.6;
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 1.5rem;
+    }
+    .back { display: inline-block; margin-bottom: 1rem; color: var(--muted); text-decoration: none; }
+    .back:hover { text-decoration: underline; color: var(--accent); }
+    h1 { margin-bottom: 0.25rem; letter-spacing: -0.02em; }
+    .subtitle { color: var(--muted); margin-top: 0; }
+    .panel {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin: 1.5rem 0;
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+    }
+    label {
+      display: flex;
+      flex-direction: column;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+    label span.unit { color: var(--muted); font-size: 0.8rem; }
+    input[type=number] {
+      margin-top: 0.35rem;
+      padding: 0.55rem 0.75rem;
+      font-size: 1rem;
+      background: var(--input-bg);
+      color: var(--fg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      font-variant-numeric: tabular-nums;
+    }
+    input[type=number]:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    .results {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 0.5rem 1.5rem;
+      font-variant-numeric: tabular-nums;
+    }
+    .results .key { color: var(--muted); }
+    .results .val { font-weight: 600; }
+    .results .val.primary { color: var(--accent); font-size: 1.1rem; }
+    pre {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      padding: 1rem;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 0.85rem;
+    }
+    .formula {
+      background: var(--card-bg);
+      border-left: 3px solid var(--accent);
+      padding: 0.75rem 1rem;
+      margin: 1rem 0;
+      font-size: 0.9rem;
+    }
+    .links a {
+      display: inline-block;
+      margin-right: 1rem;
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.9rem;
+    }
+    .links a:hover { text-decoration: underline; }
+    footer { margin-top: 2rem; color: var(--muted); font-size: 0.85rem; text-align: center; }
+  </style>
+</head>
+<body>
+  <a class="back" href="../">← Home</a>
+  <h1>Effective Index of Silica</h1>
+  <p class="subtitle">Strip waveguide, EIM (TE-TE) with Sellmeier core index</p>
+
+  <div class="panel">
+    <div class="form-grid">
+      <label>
+        Wavelength <span class="unit">(μm)</span>
+        <input type="number" id="wl" value="1.55" step="0.01" min="0.21" max="6.7" />
+      </label>
+      <label>
+        Width W <span class="unit">(μm)</span>
+        <input type="number" id="w" value="5.0" step="0.1" min="0.01" />
+      </label>
+      <label>
+        Height H <span class="unit">(μm)</span>
+        <input type="number" id="h" value="5.0" step="0.1" min="0.01" />
+      </label>
+      <label>
+        Δ = (n_core − n_clad)/n_core × 100 <span class="unit">(%)</span>
+        <input type="number" id="d" value="0.75" step="0.05" min="0.001" max="50" />
+      </label>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="results">
+      <div class="key">n_core (from Sellmeier)</div><div class="val" id="nCore">—</div>
+      <div class="key">n_clad</div><div class="val" id="nClad">—</div>
+      <div class="key">n_eff (vertical slab)</div><div class="val" id="nEffV">—</div>
+      <div class="key">n_eff (full EIM)</div><div class="val primary" id="nEff">—</div>
+    </div>
+  </div>
+
+  <h2>Formulas</h2>
+  <div class="formula">
+    <strong>Sellmeier (Malitson 1965):</strong><br />
+    n²(λ) = 1 + Σᵢ Bᵢ·λ² / (λ² − Cᵢ)
+  </div>
+  <div class="formula">
+    <strong>Slab TE eigenvalue (fundamental):</strong><br />
+    u·tan(u) = w,&nbsp;&nbsp; u² + w² = V²,&nbsp;&nbsp; V = (k₀·d/2)·√(n_core² − n_clad²)<br />
+    n_eff = √(n_core² − (2u/d)² / k₀²)
+  </div>
+  <div class="formula">
+    <strong>EIM (TE-TE):</strong>
+    1) vertical slab thickness H → n_eff_v &nbsp;&nbsp;
+    2) horizontal slab thickness W with core = n_eff_v → n_eff
+  </div>
+
+  <h2>Reference implementations</h2>
+  <p class="links">
+    <a href="https://github.com/chaktb/pic-project/blob/main/n_eff.py">n_eff.py</a>
+    <a href="https://github.com/chaktb/pic-project/blob/main/NeffCalculator.java">NeffCalculator.java</a>
+  </p>
+
+  <footer>Inline JavaScript implementation matches the Python and Java versions in the repo.</footer>
+
+  <script>
+    function nSilica(wl) {
+      const B1 = 0.6961663, B2 = 0.4079426, B3 = 0.8974794;
+      const C1 = 0.0684043 ** 2, C2 = 0.1162414 ** 2, C3 = 9.896161 ** 2;
+      const l2 = wl * wl;
+      const n2 = 1 + B1*l2/(l2-C1) + B2*l2/(l2-C2) + B3*l2/(l2-C3);
+      return Math.sqrt(n2);
+    }
+
+    function slabNeffTE(wl, d, nCore, nClad) {
+      if (nCore <= nClad) return nClad;
+      const k0 = 2 * Math.PI / wl;
+      const V = (k0 * d / 2) * Math.sqrt(nCore*nCore - nClad*nClad);
+      if (V === 0) return nClad;
+      const upper = Math.min(Math.PI/2 - 1e-9, V - 1e-12);
+      if (upper <= 0) return nClad;
+
+      const f = (u) => u * Math.tan(u) - Math.sqrt(Math.max(V*V - u*u, 0));
+      let lo = 1e-9, hi = upper;
+      let flo = f(lo), fhi = f(hi);
+      if (flo * fhi > 0) return nClad;
+
+      for (let i = 0; i < 100; i++) {
+        const mid = 0.5 * (lo + hi);
+        const fmid = f(mid);
+        if (flo * fmid <= 0) { hi = mid; fhi = fmid; }
+        else { lo = mid; flo = fmid; }
+        if (hi - lo < 1e-12) break;
+      }
+      const u = 0.5 * (lo + hi);
+      const kx = 2 * u / d;
+      const beta2 = (nCore*k0)*(nCore*k0) - kx*kx;
+      return Math.sqrt(beta2) / k0;
+    }
+
+    function compute() {
+      const wl = parseFloat(document.getElementById('wl').value);
+      const w  = parseFloat(document.getElementById('w').value);
+      const h  = parseFloat(document.getElementById('h').value);
+      const d  = parseFloat(document.getElementById('d').value);
+
+      const fmt = (x) => Number.isFinite(x) ? x.toFixed(6) : '—';
+
+      if (![wl, w, h, d].every(Number.isFinite) || wl <= 0 || w <= 0 || h <= 0 || d <= 0) {
+        ['nCore','nClad','nEffV','nEff'].forEach(id => document.getElementById(id).textContent = '—');
+        return;
+      }
+
+      const nCore = nSilica(wl);
+      const nClad = nCore * (1 - d/100);
+      const nEffV = slabNeffTE(wl, h, nCore, nClad);
+      const nEff  = slabNeffTE(wl, w, nEffV, nClad);
+
+      document.getElementById('nCore').textContent = fmt(nCore);
+      document.getElementById('nClad').textContent = fmt(nClad);
+      document.getElementById('nEffV').textContent = fmt(nEffV);
+      document.getElementById('nEff').textContent  = fmt(nEff);
+    }
+
+    ['wl','w','h','d'].forEach(id => {
+      document.getElementById(id).addEventListener('input', compute);
+    });
+    compute();
+  </script>
+</body>
+</html>
