@@ -100,6 +100,10 @@
         <input type="number" id="theta" value="90" step="1" min="0.1" max="360" /></label>
       <label>R (readout) <span class="unit">(mm)</span>
         <input type="number" id="R" value="5.0" step="0.1" min="0.001" /></label>
+      <label>Plot R<sub>min</sub> <span class="unit">(mm)</span>
+        <input type="number" id="Rmin" value="0.1" step="0.1" min="0.0001" /></label>
+      <label>Plot R<sub>max</sub> <span class="unit">(mm)</span>
+        <input type="number" id="Rmax" value="20" step="1" min="0.001" /></label>
     </div>
   </div>
 
@@ -120,7 +124,8 @@
 
   <div class="panel">
     <p style="color: var(--muted); margin-top: 0;">
-      Loss vs bend radius (semi-log y). Green and orange dashed lines mark 0.1 dB and 1 dB thresholds.
+      Loss vs bend radius (log-log). X-range set by R<sub>min</sub>/R<sub>max</sub> inputs.
+      Green / orange dashed lines mark 0.1 dB and 1 dB thresholds.
       Black dashed vertical line is your selected R.
     </p>
     <canvas id="chart"></canvas>
@@ -251,7 +256,9 @@
       else if (L < 1) { badge.className='badge warn'; badge.textContent='Acceptable (<1 dB)'; }
       else { badge.className='badge bad'; badge.textContent='High loss'; }
 
-      drawChart(theta, h.gamma, beta, a, R, Rc01, Rc1);
+      const rMinMm = parseFloat(document.getElementById('Rmin').value);
+      const rMaxMm = parseFloat(document.getElementById('Rmax').value);
+      drawChart(theta, h.gamma, beta, a, R, Rc01, Rc1, rMinMm, rMaxMm);
     }
 
     function setNoMode() {
@@ -260,7 +267,7 @@
       badge.className='badge bad'; badge.textContent='No guided mode';
     }
 
-    function drawChart(theta, gamma, beta, a, R_mark, Rc01, Rc1) {
+    function drawChart(theta, gamma, beta, a, R_mark, Rc01, Rc1, RminMm, RmaxMm) {
       const canvas = document.getElementById('chart');
       const dpr = window.devicePixelRatio || 1;
       const cssW = canvas.clientWidth || 880;
@@ -277,11 +284,19 @@
       const Wp = cssW - margin.l - margin.r;
       const Hp = cssH - margin.t - margin.b;
 
-      // X range: 0 to Rmax_mm
-      const Rmax_mm = Math.max(2 * (Rc01 || R_mark/1000), R_mark/1000 * 1.5, 10);
-      const xs = (R_mm) => margin.l + (R_mm/Rmax_mm) * Wp;
+      // X log scale (mm). Sanitize range.
+      let RminPlot = Number.isFinite(RminMm) && RminMm > 0 ? RminMm : 0.1;
+      let RmaxPlot = Number.isFinite(RmaxMm) && RmaxMm > RminPlot ? RmaxMm : RminPlot * 100;
+      const xLogMin = Math.log10(RminPlot);
+      const xLogMax = Math.log10(RmaxPlot);
+      const xs = (R_mm) => {
+        const lv = Math.log10(Math.max(R_mm, 1e-12));
+        const t = (lv - xLogMin) / (xLogMax - xLogMin);
+        return margin.l + Math.max(0, Math.min(1, t)) * Wp;
+      };
+
       // Y log scale: 1e-4 to 1e3 dB
-      const yMin = -4, yMax = 3; // log10
+      const yMin = -4, yMax = 3;
       const ys = (L_dB) => {
         const v = Math.log10(Math.max(L_dB, 1e-10));
         const t = (v - yMin) / (yMax - yMin);
@@ -297,12 +312,17 @@
         ctx.beginPath(); ctx.moveTo(margin.l, y); ctx.lineTo(margin.l + Wp, y); ctx.stroke();
         ctx.fillText('10^' + k, 8, y + 4);
       }
-      // X grid lines
-      const xStep = Rmax_mm <= 10 ? 1 : (Rmax_mm <= 50 ? 5 : 10);
-      for (let r = 0; r <= Rmax_mm + 1e-6; r += xStep) {
-        const x = xs(r);
-        ctx.beginPath(); ctx.moveTo(x, margin.t); ctx.lineTo(x, margin.t + Hp); ctx.stroke();
-        ctx.fillText(r.toFixed(0), x - 6, margin.t + Hp + 14);
+      // X grid: ticks at every decade and minor ticks at 2,5
+      const kMin = Math.floor(xLogMin), kMax = Math.ceil(xLogMax);
+      for (let k = kMin; k <= kMax; k++) {
+        for (const m of [1, 2, 5]) {
+          const r = m * Math.pow(10, k);
+          if (r < RminPlot * 0.999 || r > RmaxPlot * 1.001) continue;
+          const x = xs(r);
+          ctx.beginPath(); ctx.moveTo(x, margin.t); ctx.lineTo(x, margin.t + Hp); ctx.stroke();
+          const lbl = r >= 1 ? r.toString() : r.toFixed(Math.max(1, -Math.floor(Math.log10(r))));
+          ctx.fillText(lbl, x - 6, margin.t + Hp + 14);
+        }
       }
       ctx.setLineDash([]);
 
@@ -330,12 +350,13 @@
       ctx.fillText('Loss (dB, log)', 0, 0);
       ctx.restore();
 
-      // Loss curve
+      // Loss curve (log-spaced samples)
       ctx.strokeStyle = '#3b5bdb'; ctx.lineWidth = 2;
       ctx.beginPath();
       const N = 600;
       for (let i = 0; i <= N; i++) {
-        const r_mm = (i/N) * Rmax_mm;
+        const lv = xLogMin + (xLogMax - xLogMin) * (i / N);
+        const r_mm = Math.pow(10, lv);
         const r_um = r_mm * 1000;
         const L = lossDb(r_um, theta, gamma, beta, a);
         const x = xs(r_mm), y = ys(L);
@@ -343,32 +364,36 @@
       }
       ctx.stroke();
 
-      // Operating R vertical line
-      ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
-      const xR = xs(R_mark/1000);
-      ctx.beginPath(); ctx.moveTo(xR, margin.t); ctx.lineTo(xR, margin.t + Hp); ctx.stroke();
-      ctx.setLineDash([]);
-      const Lop = lossDb(R_mark, theta, gamma, beta, a);
-      ctx.fillStyle = '#000';
-      ctx.beginPath(); ctx.arc(xR, ys(Lop), 4, 0, 2*Math.PI); ctx.fill();
-      ctx.fillStyle = fg;
-      ctx.font = 'bold 11px -apple-system, sans-serif';
-      ctx.fillText(`R=${(R_mark/1000).toFixed(2)}mm: ${Lop.toExponential(2)} dB`, xR + 6, ys(Lop) - 6);
+      // Operating R vertical line (only if inside plot range)
+      const Rmark_mm = R_mark / 1000;
+      if (Rmark_mm >= RminPlot * 0.999 && Rmark_mm <= RmaxPlot * 1.001) {
+        ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+        const xR = xs(Rmark_mm);
+        ctx.beginPath(); ctx.moveTo(xR, margin.t); ctx.lineTo(xR, margin.t + Hp); ctx.stroke();
+        ctx.setLineDash([]);
+        const Lop = lossDb(R_mark, theta, gamma, beta, a);
+        ctx.fillStyle = '#000';
+        ctx.beginPath(); ctx.arc(xR, ys(Lop), 4, 0, 2*Math.PI); ctx.fill();
+        ctx.fillStyle = fg;
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillText(`R=${Rmark_mm.toFixed(2)}mm: ${Lop.toExponential(2)} dB`, xR + 6, ys(Lop) - 6);
+      }
 
       // Critical-R markers
       [['0.1dB', Rc01, '#2f9e44'], ['1dB', Rc1, '#f08c00']].forEach(([lbl, rc, color]) => {
         if (rc === null || rc === 0) return;
-        const x = xs(rc/1000);
-        if (x < margin.l || x > margin.l + Wp) return;
+        const rc_mm = rc / 1000;
+        if (rc_mm < RminPlot * 0.999 || rc_mm > RmaxPlot * 1.001) return;
+        const x = xs(rc_mm);
         ctx.strokeStyle = color; ctx.setLineDash([2, 4]);
         ctx.beginPath(); ctx.moveTo(x, margin.t); ctx.lineTo(x, margin.t + Hp); ctx.stroke();
         ctx.setLineDash([]);
         ctx.fillStyle = color; ctx.font = '10px -apple-system, sans-serif';
-        ctx.fillText(`R_c(${lbl})=${(rc/1000).toFixed(2)}`, x + 3, margin.t + 12);
+        ctx.fillText(`R_c(${lbl})=${rc_mm.toFixed(2)}`, x + 3, margin.t + 12);
       });
     }
 
-    ['wl','W','H','delta','theta','R'].forEach(id => {
+    ['wl','W','H','delta','theta','R','Rmin','Rmax'].forEach(id => {
       document.getElementById(id).addEventListener('input', compute);
     });
     window.addEventListener('resize', compute);
