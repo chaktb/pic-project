@@ -82,10 +82,14 @@
         <input type="number" id="H" value="5.0" step="0.1" min="0.05" /></label>
       <label>Δ <span class="unit">(%)</span>
         <input type="number" id="delta" value="0.75" step="0.05" min="0.001" max="50" /></label>
-      <label>Gap <span class="unit">(μm)</span>
-        <input type="number" id="gap" value="5.0" step="0.5" min="0.1" /></label>
-      <label>L_DC (each) <span class="unit">(μm)</span>
-        <input type="number" id="L" value="300" step="10" min="0.1" /></label>
+      <label>DC1 gap <span class="unit">(μm)</span>
+        <input type="number" id="gap1" value="5.0" step="0.5" min="0.1" /></label>
+      <label>DC1 L <span class="unit">(μm)</span>
+        <input type="number" id="L1" value="300" step="10" min="0.1" /></label>
+      <label>DC2 gap <span class="unit">(μm)</span>
+        <input type="number" id="gap2" value="5.0" step="0.5" min="0.1" /></label>
+      <label>DC2 L <span class="unit">(μm)</span>
+        <input type="number" id="L2" value="300" step="10" min="0.1" /></label>
       <label>ΔL (path diff) <span class="unit">(μm)</span>
         <input type="number" id="dL" value="100" step="10" min="0.1" /></label>
       <label>λ start <span class="unit">(μm)</span>
@@ -101,8 +105,8 @@
     <div class="results">
       <div class="key">λ_center</div><div class="val" id="wlc">—</div>
       <div class="key">n_eff (at center)</div><div class="val" id="ne">—</div>
-      <div class="key">κ (coupling, center)</div><div class="val" id="kp">—</div>
-      <div class="key">κ·L_DC (each coupler)</div><div class="val" id="kL">—</div>
+      <div class="key">κ₁ · L₁ (DC1 split angle)</div><div class="val" id="kL1d">—</div>
+      <div class="key">κ₂ · L₂ (DC2 split angle)</div><div class="val" id="kL2d">—</div>
       <div class="key">FSR (theory) λ²/(n_eff·ΔL)</div><div class="val primary" id="fsr">—</div>
       <div class="key">Bar peaks (P_bar≈1) at λ ≈</div><div class="val" id="bpeaks">—</div>
       <div class="key">Cross peaks (P_cross≈1) at λ ≈</div><div class="val" id="cpeaks">—</div>
@@ -171,46 +175,51 @@
       const k = 2*h2*h.gamma*Math.exp(-h.gamma*gap) / (beta*(h2+h.gamma*h.gamma)*(1+h.gamma*a));
       return { kappa: k, nEff: h.nEff };
     }
-    function mziPower(wl, W, H, dl, gap, L_DC, dL) {
-      const kn = kappaNeff(wl, W, H, dl, gap);
-      if (!kn) return null;
-      const kL = kn.kappa * L_DC;
-      const dphi = (2*Math.PI*kn.nEff/wl) * dL;
-      const a_ = Math.cos(kL) * Math.cos(kL);
-      const b_ = Math.sin(kL) * Math.sin(kL);
+    function mziPower(wl, W, H, dl, gap1, L1, gap2, L2, dL) {
+      const kn1 = kappaNeff(wl, W, H, dl, gap1);
+      const kn2 = kappaNeff(wl, W, H, dl, gap2);
+      if (!kn1 || !kn2) return null;
+      const kL1 = kn1.kappa * L1;
+      const kL2 = kn2.kappa * L2;
+      const dphi = (2*Math.PI*kn1.nEff/wl) * dL;
+      const a_ = Math.cos(kL1) * Math.cos(kL2);
+      const b_ = Math.sin(kL1) * Math.sin(kL2);
       const Pbar = a_*a_ + b_*b_ - 2*a_*b_*Math.cos(dphi);
-      return { kappa: kn.kappa, nEff: kn.nEff, kL, dphi, Pbar, Pcross: Math.max(0, 1 - Pbar) };
+      return { kappa1: kn1.kappa, kappa2: kn2.kappa, nEff: kn1.nEff,
+               kL1, kL2, dphi, Pbar, Pcross: Math.max(0, 1 - Pbar) };
     }
 
     function compute() {
-      const W   = parseFloat(document.getElementById('W').value);
-      const H   = parseFloat(document.getElementById('H').value);
-      const dl  = parseFloat(document.getElementById('delta').value);
-      const gap = parseFloat(document.getElementById('gap').value);
-      const L   = parseFloat(document.getElementById('L').value);
-      const dL  = parseFloat(document.getElementById('dL').value);
-      let wlA   = parseFloat(document.getElementById('wlA').value);
-      let wlB   = parseFloat(document.getElementById('wlB').value);
-      const N   = Math.max(20, Math.min(2000, parseInt(document.getElementById('Npts').value) || 500));
-      if (![W,H,dl,gap,L,dL,wlA,wlB].every(Number.isFinite) ||
-          W<=0||H<=0||dl<=0||gap<=0||L<=0||dL<=0||wlA<=0||wlB<=0) return;
+      const W    = parseFloat(document.getElementById('W').value);
+      const H    = parseFloat(document.getElementById('H').value);
+      const dl   = parseFloat(document.getElementById('delta').value);
+      const gap1 = parseFloat(document.getElementById('gap1').value);
+      const L1   = parseFloat(document.getElementById('L1').value);
+      const gap2 = parseFloat(document.getElementById('gap2').value);
+      const L2   = parseFloat(document.getElementById('L2').value);
+      const dL   = parseFloat(document.getElementById('dL').value);
+      let wlA    = parseFloat(document.getElementById('wlA').value);
+      let wlB    = parseFloat(document.getElementById('wlB').value);
+      const N    = Math.max(20, Math.min(2000, parseInt(document.getElementById('Npts').value) || 500));
+      if (![W,H,dl,gap1,L1,gap2,L2,dL,wlA,wlB].every(Number.isFinite) ||
+          W<=0||H<=0||dl<=0||gap1<=0||L1<=0||gap2<=0||L2<=0||dL<=0||wlA<=0||wlB<=0) return;
       if (wlB <= wlA) wlB = wlA + 0.01;
 
       const wls = [], Pb = [], Pc = [];
       for (let i = 0; i < N; i++) {
         const wl = wlA + (wlB - wlA) * i / (N - 1);
-        const r = mziPower(wl, W, H, dl, gap, L, dL);
+        const r = mziPower(wl, W, H, dl, gap1, L1, gap2, L2, dL);
         wls.push(wl);
         if (r === null) { Pb.push(NaN); Pc.push(NaN); }
         else { Pb.push(r.Pbar); Pc.push(r.Pcross); }
       }
 
       const wlc = (wlA + wlB) / 2;
-      const rc = mziPower(wlc, W, H, dl, gap, L, dL);
+      const rc = mziPower(wlc, W, H, dl, gap1, L1, gap2, L2, dL);
       document.getElementById('wlc').textContent = wlc.toFixed(4) + ' μm';
       document.getElementById('ne').textContent  = rc ? rc.nEff.toFixed(6) : '—';
-      document.getElementById('kp').textContent  = rc ? rc.kappa.toExponential(4) + ' /μm' : '—';
-      document.getElementById('kL').textContent  = rc ? rc.kL.toFixed(4) + ' rad (' + (rc.kL*180/Math.PI).toFixed(2) + '°)' : '—';
+      document.getElementById('kL1d').textContent = rc ? rc.kL1.toFixed(4) + ' rad (' + (rc.kL1*180/Math.PI).toFixed(2) + '°)' : '—';
+      document.getElementById('kL2d').textContent = rc ? rc.kL2.toFixed(4) + ' rad (' + (rc.kL2*180/Math.PI).toFixed(2) + '°)' : '—';
       const fsr_um = rc ? wlc*wlc/(rc.nEff*Math.max(dL,1e-12)) : null;
       document.getElementById('fsr').textContent = fsr_um ? (fsr_um*1000).toFixed(3) + ' nm' : '—';
 
@@ -225,11 +234,11 @@
       document.getElementById('bpeaks').textContent = bp.length ? bp.map(x => x.toFixed(4)).join(', ') + ' μm' : '— (none)';
       document.getElementById('cpeaks').textContent = cp.length ? cp.map(x => x.toFixed(4)).join(', ') + ' μm' : '— (none)';
 
-      drawSchematic(L, dL);
+      drawSchematic(L1, L2, dL);
       drawSpectrum(wls, Pb, Pc, bp, cp, wlA, wlB);
     }
 
-    function drawSchematic(L_DC, dL) {
+    function drawSchematic(L1, L2, dL) {
       const canvas = document.getElementById('schematic');
       const dpr = window.devicePixelRatio || 1;
       const cssW = canvas.clientWidth || 880;
@@ -250,35 +259,38 @@
       const yTop = yc - dy, yBot = yc + dy;
       const wgT = 6;
       // Layout: stub - DC1 - arm - DC2 - stub
-      const stubPx = Wp * 0.10;
-      const dcPx = Wp * 0.10;
-      const armPx = Wp * 0.40;
+      const stubPx = Wp * 0.08;
+      // DC widths proportional to L1, L2 (with min visible size)
+      const Ltot = L1 + L2;
+      const dcSpan = Wp * 0.30;
+      const dc1Px = Math.max(20, dcSpan * (L1 / Ltot));
+      const dc2Px = Math.max(20, dcSpan * (L2 / Ltot));
+      const armPx = Wp - 2*stubPx - dc1Px - dc2Px;
       const xS = margin.l;
-      const xDC1a = xS + stubPx, xDC1b = xDC1a + dcPx;
-      const xDC2a = xDC1b + armPx, xDC2b = xDC2a + dcPx;
+      const xDC1a = xS + stubPx, xDC1b = xDC1a + dc1Px;
+      const xDC2a = xDC1b + armPx, xDC2b = xDC2a + dc2Px;
       const xE = xDC2b + stubPx;
 
       ctx.fillStyle = core;
       // Input stub (top only excited; both lines drawn)
       ctx.fillRect(xS, yTop - wgT/2, stubPx, wgT);
       ctx.fillRect(xS, yBot - wgT/2, stubPx, wgT);
-      // DC1 (drawn as two close-spaced WGs that bring lines together)
-      // Show as boxed region for clarity
+      // DC1
       ctx.fillStyle = '#ffd43b88';
-      ctx.fillRect(xDC1a, yTop - wgT/2 - 2, dcPx, (yBot - yTop) + wgT + 4);
+      ctx.fillRect(xDC1a, yTop - wgT/2 - 2, dc1Px, (yBot - yTop) + wgT + 4);
       ctx.fillStyle = core;
-      ctx.fillRect(xDC1a, yTop - wgT/2, dcPx, wgT);
-      ctx.fillRect(xDC1a, yBot - wgT/2, dcPx, wgT);
+      ctx.fillRect(xDC1a, yTop - wgT/2, dc1Px, wgT);
+      ctx.fillRect(xDC1a, yBot - wgT/2, dc1Px, wgT);
       ctx.strokeStyle = fg; ctx.lineWidth = 1;
-      ctx.strokeRect(xDC1a, yTop - wgT/2 - 2, dcPx, (yBot - yTop) + wgT + 4);
+      ctx.strokeRect(xDC1a, yTop - wgT/2 - 2, dc1Px, (yBot - yTop) + wgT + 4);
       // DC2
       ctx.fillStyle = '#ffd43b88';
-      ctx.fillRect(xDC2a, yTop - wgT/2 - 2, dcPx, (yBot - yTop) + wgT + 4);
+      ctx.fillRect(xDC2a, yTop - wgT/2 - 2, dc2Px, (yBot - yTop) + wgT + 4);
       ctx.fillStyle = core;
-      ctx.fillRect(xDC2a, yTop - wgT/2, dcPx, wgT);
-      ctx.fillRect(xDC2a, yBot - wgT/2, dcPx, wgT);
+      ctx.fillRect(xDC2a, yTop - wgT/2, dc2Px, wgT);
+      ctx.fillRect(xDC2a, yBot - wgT/2, dc2Px, wgT);
       ctx.strokeStyle = fg;
-      ctx.strokeRect(xDC2a, yTop - wgT/2 - 2, dcPx, (yBot - yTop) + wgT + 4);
+      ctx.strokeRect(xDC2a, yTop - wgT/2 - 2, dc2Px, (yBot - yTop) + wgT + 4);
       // Arms between DC1 and DC2
       ctx.fillStyle = core;
       ctx.fillRect(xDC1b, yTop - wgT/2, armPx, wgT);
@@ -309,10 +321,9 @@
       ctx.fillText('bar',   xE - 22, yTop - 8);
       ctx.fillText('cross', xE - 28, yBot + 22);
       ctx.fillStyle = muted; ctx.font = '11px -apple-system, sans-serif';
-      ctx.fillText('DC1',   xDC1a + dcPx/2 - 12, margin.t + 12);
-      ctx.fillText('DC2',   xDC2a + dcPx/2 - 12, margin.t + 12);
+      ctx.fillText('DC1 (L=' + L1.toFixed(0) + ')', xDC1a, margin.t + 12);
+      ctx.fillText('DC2 (L=' + L2.toFixed(0) + ')', xDC2a, margin.t + 12);
       ctx.fillText('+ΔL = ' + dL.toFixed(0) + ' μm', xDC1b + armPx/2 - 35, yBot + bumpH + 22);
-      ctx.fillText('L_DC = ' + L_DC.toFixed(0) + ' μm', (xDC1a + xDC2b)/2 - 30, cssH - 4);
     }
 
     function drawSpectrum(wls, Pb, Pc, bPeaks, cPeaks, wlA, wlB) {
@@ -405,7 +416,7 @@
       ctx.fillStyle = fg; ctx.fillText('P_cross', lx + 18, ly + 14);
     }
 
-    ['W','H','delta','gap','L','dL','wlA','wlB','Npts'].forEach(id => {
+    ['W','H','delta','gap1','L1','gap2','L2','dL','wlA','wlB','Npts'].forEach(id => {
       document.getElementById(id).addEventListener('input', compute);
     });
     window.addEventListener('resize', compute);

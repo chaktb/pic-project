@@ -77,46 +77,56 @@ def kappa_and_neff(wl, W, H, delta, gap):
     return kappa, n_eff
 
 
-def mzi_outputs(wl, W, H, delta, gap, L_DC, dL):
-    kappa, n_eff = kappa_and_neff(wl, W, H, delta, gap)
-    if kappa is None:
+def mzi_outputs(wl, W, H, delta, gap1, L1, gap2, L2, dL):
+    kappa1, n_eff = kappa_and_neff(wl, W, H, delta, gap1)
+    kappa2, _     = kappa_and_neff(wl, W, H, delta, gap2)
+    if kappa1 is None or kappa2 is None:
         return None
-    k1 = k2 = kappa * L_DC
+    k1 = kappa1 * L1
+    k2 = kappa2 * L2
     dphi = (2 * math.pi * n_eff / wl) * dL
     a_ = math.cos(k1) * math.cos(k2)
     b_ = math.sin(k1) * math.sin(k2)
     P_bar = a_*a_ + b_*b_ - 2*a_*b_*math.cos(dphi)
     P_cross = max(0.0, 1.0 - P_bar)
-    return {"kappa": kappa, "n_eff": n_eff, "kL": k1, "dphi": dphi,
+    return {"kappa1": kappa1, "kappa2": kappa2, "n_eff": n_eff,
+            "kL1": k1, "kL2": k2, "dphi": dphi,
             "P_bar": P_bar, "P_cross": P_cross}
 
 
 def main():
-    if len(sys.argv) not in (10, 11):
-        print("Usage: python mzi.py <wl_start> <wl_end> <W> <H> <delta_pct> <gap> <L_DC> <Delta_L> [N=400]")
-        print("Example: python mzi.py 1.50 1.60 5.0 5.0 0.75 5.0 300 100")
+    if len(sys.argv) not in (12, 13):
+        print("Usage: python mzi.py <wl_start> <wl_end> <W> <H> <delta_pct>"
+              " <gap1> <L1> <gap2> <L2> <Delta_L> [N=400]")
+        print("Example: python mzi.py 1.50 1.60 5.0 5.0 0.75 5.0 300 5.0 300 100")
         sys.exit(1)
-    wl_a = float(sys.argv[1])
-    wl_b = float(sys.argv[2])
-    W    = float(sys.argv[3])
-    H    = float(sys.argv[4])
-    dl   = float(sys.argv[5])
-    gap  = float(sys.argv[6])
-    L_DC = float(sys.argv[7])
-    dL   = float(sys.argv[8])
-    N    = int(sys.argv[9]) if len(sys.argv) >= 10 else 400
+    wl_a  = float(sys.argv[1])
+    wl_b  = float(sys.argv[2])
+    W     = float(sys.argv[3])
+    H     = float(sys.argv[4])
+    dl    = float(sys.argv[5])
+    gap1  = float(sys.argv[6])
+    L1    = float(sys.argv[7])
+    gap2  = float(sys.argv[8])
+    L2    = float(sys.argv[9])
+    dL    = float(sys.argv[10])
+    N     = int(sys.argv[11]) if len(sys.argv) >= 12 else 400
 
     wlc = 0.5 * (wl_a + wl_b)
-    rc = mzi_outputs(wlc, W, H, dl, gap, L_DC, dL)
+    rc = mzi_outputs(wlc, W, H, dl, gap1, L1, gap2, L2, dL)
     if rc:
         fsr_um = wlc * wlc / (rc["n_eff"] * max(dL, 1e-12))
-        print(f"# MZI W={W} H={H} delta={dl}% gap={gap} L_DC={L_DC} dL={dL}")
-        print(f"# at lambda_center={wlc:.4f}: kappa={rc['kappa']:.4e}/um  kL={rc['kL']:.4f}  n_eff={rc['n_eff']:.6f}")
+        print(f"# MZI W={W} H={H} delta={dl}%"
+              f" DC1(gap={gap1},L={L1})  DC2(gap={gap2},L={L2})  dL={dL}")
+        print(f"# at lambda_center={wlc:.4f}:")
+        print(f"#   kappa1={rc['kappa1']:.4e}/um  kL1={rc['kL1']:.4f}")
+        print(f"#   kappa2={rc['kappa2']:.4e}/um  kL2={rc['kL2']:.4f}")
+        print(f"#   n_eff={rc['n_eff']:.6f}")
         print(f"# approximate FSR ~ {fsr_um*1000:.4f} nm")
     print("# wavelength_um, P_bar, P_cross")
     for i in range(N):
         wl = wl_a + (wl_b - wl_a) * i / (N - 1)
-        r = mzi_outputs(wl, W, H, dl, gap, L_DC, dL)
+        r = mzi_outputs(wl, W, H, dl, gap1, L1, gap2, L2, dL)
         if r is None:
             print(f"{wl:.6f}, NaN, NaN")
         else:

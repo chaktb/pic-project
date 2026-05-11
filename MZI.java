@@ -55,50 +55,57 @@ public class MZI {
         return new double[] { kappa, nEff };
     }
 
-    public static double[] mziPower(double wl, double W, double H, double dl, double gap, double L_DC, double dL) {
-        double[] kn = kappaNeff(wl, W, H, dl, gap);
-        if (kn == null) return null;
-        double kappa = kn[0], nEff = kn[1];
-        double kL = kappa * L_DC;
+    public static double[] mziPower(double wl, double W, double H, double dl,
+                                    double gap1, double L1, double gap2, double L2, double dL) {
+        double[] kn1 = kappaNeff(wl, W, H, dl, gap1);
+        double[] kn2 = kappaNeff(wl, W, H, dl, gap2);
+        if (kn1 == null || kn2 == null) return null;
+        double kappa1 = kn1[0], kappa2 = kn2[0];
+        double nEff = kn1[1]; // same waveguide
+        double kL1 = kappa1 * L1, kL2 = kappa2 * L2;
         double dphi = (2 * Math.PI * nEff / wl) * dL;
-        double a_ = Math.cos(kL) * Math.cos(kL);
-        double b_ = Math.sin(kL) * Math.sin(kL);
+        double a_ = Math.cos(kL1) * Math.cos(kL2);
+        double b_ = Math.sin(kL1) * Math.sin(kL2);
         double Pbar = a_*a_ + b_*b_ - 2*a_*b_*Math.cos(dphi);
-        // Note: a_=cos^2(kL), b_=sin^2(kL); the cross terms in |E|^2 give:
-        // |E_bar|^2 = (cos*cos)^2 + (sin*sin)^2 - 2*(cos*cos)*(sin*sin)*cos(dphi)
-        // which is what's coded above with a_=cos*cos, b_=sin*sin
-        return new double[] { kappa, nEff, kL, dphi, Pbar, Math.max(0, 1 - Pbar) };
+        return new double[] { kappa1, kappa2, nEff, kL1, kL2, dphi, Pbar, Math.max(0, 1 - Pbar) };
     }
 
     public static void main(String[] args) {
-        if (args.length < 8 || args.length > 9) {
-            System.out.println("Usage: java MZI <wl_start> <wl_end> <W> <H> <delta_pct> <gap> <L_DC> <Delta_L> [N=400]");
+        if (args.length < 10 || args.length > 11) {
+            System.out.println("Usage: java MZI <wl_start> <wl_end> <W> <H> <delta_pct>"
+                             + " <gap1> <L1> <gap2> <L2> <Delta_L> [N=400]");
             return;
         }
-        double wlA = Double.parseDouble(args[0]);
-        double wlB = Double.parseDouble(args[1]);
-        double W   = Double.parseDouble(args[2]);
-        double H   = Double.parseDouble(args[3]);
-        double dl  = Double.parseDouble(args[4]);
-        double gap = Double.parseDouble(args[5]);
-        double L_DC = Double.parseDouble(args[6]);
-        double dL  = Double.parseDouble(args[7]);
-        int N      = args.length >= 9 ? Integer.parseInt(args[8]) : 400;
+        double wlA  = Double.parseDouble(args[0]);
+        double wlB  = Double.parseDouble(args[1]);
+        double W    = Double.parseDouble(args[2]);
+        double H    = Double.parseDouble(args[3]);
+        double dl   = Double.parseDouble(args[4]);
+        double gap1 = Double.parseDouble(args[5]);
+        double L1   = Double.parseDouble(args[6]);
+        double gap2 = Double.parseDouble(args[7]);
+        double L2   = Double.parseDouble(args[8]);
+        double dL   = Double.parseDouble(args[9]);
+        int N       = args.length >= 11 ? Integer.parseInt(args[10]) : 400;
 
         double wlc = 0.5 * (wlA + wlB);
-        double[] rc = mziPower(wlc, W, H, dl, gap, L_DC, dL);
+        double[] rc = mziPower(wlc, W, H, dl, gap1, L1, gap2, L2, dL);
         if (rc != null) {
-            double fsr_um = wlc * wlc / (rc[1] * Math.max(dL, 1e-12));
-            System.out.printf("# MZI W=%.2f H=%.2f delta=%.4f%% gap=%.2f L_DC=%.2f dL=%.2f%n", W, H, dl, gap, L_DC, dL);
-            System.out.printf("# at lambda_center=%.4f: kappa=%.4e/um  kL=%.4f  n_eff=%.6f%n", wlc, rc[0], rc[2], rc[1]);
+            double fsr_um = wlc * wlc / (rc[2] * Math.max(dL, 1e-12));
+            System.out.printf("# MZI W=%.2f H=%.2f delta=%.4f%% DC1(gap=%.2f,L=%.2f) DC2(gap=%.2f,L=%.2f) dL=%.2f%n",
+                              W, H, dl, gap1, L1, gap2, L2, dL);
+            System.out.printf("# at lambda_center=%.4f:%n", wlc);
+            System.out.printf("#   kappa1=%.4e/um  kL1=%.4f%n", rc[0], rc[3]);
+            System.out.printf("#   kappa2=%.4e/um  kL2=%.4f%n", rc[1], rc[4]);
+            System.out.printf("#   n_eff=%.6f%n", rc[2]);
             System.out.printf("# approximate FSR ~ %.4f nm%n", fsr_um * 1000);
         }
         System.out.println("# wavelength_um, P_bar, P_cross");
         for (int i = 0; i < N; i++) {
             double wl = wlA + (wlB - wlA) * i / (N - 1);
-            double[] r = mziPower(wl, W, H, dl, gap, L_DC, dL);
+            double[] r = mziPower(wl, W, H, dl, gap1, L1, gap2, L2, dL);
             if (r == null) System.out.printf("%.6f, NaN, NaN%n", wl);
-            else           System.out.printf("%.6f, %.6f, %.6f%n", wl, r[4], r[5]);
+            else           System.out.printf("%.6f, %.6f, %.6f%n", wl, r[6], r[7]);
         }
     }
 }
