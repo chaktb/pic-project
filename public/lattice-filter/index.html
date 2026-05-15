@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lattice Form Filter (Bandpass)</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #ffffff;
+      --fg: #1a1a1a;
+      --muted: #666;
+      --card-bg: #f7f7f9;
+      --card-border: #e1e1e6;
+      --accent: #3b5bdb;
+      --input-bg: #ffffff;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0e0e10;
+        --fg: #e8e8ea;
+        --muted: #9a9aa3;
+        --card-bg: #1a1a1e;
+        --card-border: #2a2a30;
+        --accent: #748ffc;
+        --input-bg: #14141a;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0 auto; max-width: 920px; padding: 1.5rem;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg); color: var(--fg); line-height: 1.6;
+    }
+    .back { display: inline-block; margin-bottom: 1rem; color: var(--muted); text-decoration: none; }
+    .back:hover { text-decoration: underline; color: var(--accent); }
+    h1 { margin-bottom: 0.25rem; letter-spacing: -0.02em; }
+    .subtitle { color: var(--muted); margin-top: 0; }
+    .panel {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0;
+    }
+    .form-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem;
+    }
+    label { display: flex; flex-direction: column; font-size: 0.9rem; color: var(--muted); }
+    label span.unit { font-size: 0.8rem; }
+    input[type=number] {
+      margin-top: 0.35rem; padding: 0.55rem 0.75rem; font-size: 1rem;
+      background: var(--input-bg); color: var(--fg); border: 1px solid var(--card-border);
+      border-radius: 8px; font-variant-numeric: tabular-nums;
+    }
+    input[type=number]:focus { outline: none; border-color: var(--accent); }
+    button {
+      padding: 0.6rem 1.2rem; font-size: 0.95rem; font-weight: 600;
+      background: var(--accent); color: white; border: none; border-radius: 8px; cursor: pointer;
+      margin-right: 0.5rem;
+    }
+    button:hover { opacity: 0.9; }
+    button.secondary { background: var(--card-bg); color: var(--fg); border: 1px solid var(--card-border); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+    th, td { padding: 0.4rem 0.6rem; text-align: left; border-bottom: 1px solid var(--card-border); }
+    th { color: var(--muted); font-weight: 500; font-size: 0.85rem; }
+    .results {
+      display: grid; grid-template-columns: 1fr auto;
+      gap: 0.4rem 1.5rem; font-variant-numeric: tabular-nums;
+    }
+    .results .key { color: var(--muted); }
+    .results .val { font-weight: 600; }
+    .results .val.primary { color: var(--accent); font-size: 1.05rem; }
+    canvas { width: 100%; height: 380px; display: block; background: var(--input-bg); border-radius: 8px; }
+    .links a { display: inline-block; margin-right: 1rem; color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+    .links a:hover { text-decoration: underline; }
+    .formula {
+      background: var(--card-bg); border-left: 3px solid var(--accent);
+      padding: 0.75rem 1rem; margin: 0.75rem 0; font-size: 0.9rem;
+    }
+    #status { margin-top: 0.5rem; color: var(--muted); font-size: 0.9rem; min-height: 1.2em; }
+    footer { margin-top: 2rem; color: var(--muted); font-size: 0.85rem; text-align: center; }
+  </style>
+</head>
+<body>
+  <a class="back" href="../">← Home</a>
+  <h1>Lattice Form Filter</h1>
+  <p class="subtitle">Cascaded MZI lattice — N stages tuned for a narrow bandpass response (default: 1550 nm center, 0.2 nm passband).</p>
+
+  <div class="panel">
+    <h3 style="margin-top:0">Waveguide</h3>
+    <div class="form-grid">
+      <label>WG width W <span class="unit">(μm)</span><input type="number" id="W" value="5.0" step="0.1" min="0.05" /></label>
+      <label>WG height H <span class="unit">(μm)</span><input type="number" id="H" value="5.0" step="0.1" min="0.05" /></label>
+      <label>Δ <span class="unit">(%)</span><input type="number" id="delta" value="0.75" step="0.05" min="0.001" max="50" /></label>
+      <label>DC gap <span class="unit">(μm, common)</span><input type="number" id="gap" value="5.0" step="0.1" min="0.1" /></label>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3 style="margin-top:0">Bandpass spec</h3>
+    <div class="form-grid">
+      <label>λ center <span class="unit">(nm)</span><input type="number" id="wlcNm" value="1550" step="1" min="210" max="6700" /></label>
+      <label>Passband Δλ <span class="unit">(nm, FWHM)</span><input type="number" id="pbNm" value="0.2" step="0.05" min="0.01" /></label>
+      <label>Stages N<input type="number" id="nStages" value="3" step="1" min="1" max="6" /></label>
+    </div>
+    <p style="color: var(--muted); font-size: 0.85rem; margin-top: 0.75rem;">
+      Target points (auto-generated) — peak at λ_c, 3 dB at ±Δλ/2, deep stop beyond ±Δλ:
+    </p>
+    <table id="targets"><thead><tr><th>λ (nm)</th><th>P_bar target</th><th>Weight</th></tr><tbody id="tBody"></tbody></thead></table>
+  </div>
+
+  <div class="panel">
+    <h3 style="margin-top:0">Bounds</h3>
+    <div class="form-grid">
+      <label>L min <span class="unit">(μm)</span><input type="number" id="LMin" value="10" step="10" /></label>
+      <label>L max <span class="unit">(μm)</span><input type="number" id="LMax" value="5000" step="50" /></label>
+      <label>ΔL min <span class="unit">(μm)</span><input type="number" id="dLMin" value="50" step="10" /></label>
+      <label>ΔL max <span class="unit">(μm)</span><input type="number" id="dLMax" value="5000" step="50" /></label>
+      <label>Random starts<input type="number" id="nStarts" value="80" step="10" min="1" max="500" /></label>
+      <label>Seed<input type="number" id="seed" value="1" step="1" /></label>
+    </div>
+    <div style="margin-top: 0.75rem;">
+      <button id="btnRun">Optimize</button>
+      <span id="status"></span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3 style="margin-top:0">Best parameters</h3>
+    <div class="results" id="results">
+      <div class="key">—</div><div class="val">—</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3 style="margin-top:0">Spectrum</h3>
+    <p style="color: var(--muted); margin-top: 0;">Window auto-set to ±5·Δλ around λ_c. Target points marked.</p>
+    <canvas id="chart"></canvas>
+  </div>
+
+  <h2>Equations</h2>
+  <div class="formula">
+    N-stage lattice: T = K(θ<sub>N</sub>)·Φ·K(θ<sub>N−1</sub>)·Φ·…·Φ·K(θ<sub>0</sub>),
+    where K(θ) = [[cos θ, −j sin θ], [−j sin θ, cos θ]] and Φ = diag(1, exp(−jΔφ)).
+  </div>
+  <div class="formula">
+    θ<sub>k</sub> = κ(λ)·L<sub>k</sub>,&nbsp; Δφ = (2π·n<sub>eff</sub>/λ)·ΔL,&nbsp; FSR = λ²/(n<sub>eff</sub>·ΔL).
+  </div>
+  <div class="formula">
+    P<sub>bar</sub>(λ) = |T<sub>11</sub>|²,&nbsp; P<sub>cross</sub>(λ) = |T<sub>21</sub>|² = 1 − P<sub>bar</sub>.
+  </div>
+
+  <h2>Reference implementations</h2>
+  <p class="links">
+    <a href="https://github.com/chaktb/pic-project/blob/main/lattice_filter.py">lattice_filter.py</a>
+    <a href="https://github.com/chaktb/pic-project/blob/main/LatticeFilter.java">LatticeFilter.java</a>
+    <a href="../mzi-optimization/">→ MZI Optimization (1-stage)</a>
+    <a href="../mzi/">→ MZI Spectrum</a>
+  </p>
+
+  <footer>Multi-start Nelder-Mead in pure JavaScript. 1–10 s in browser depending on N and random starts.</footer>
+
+  <script>
+    // ---- physics ----
+    function nSilica(wl) {
+      const B1=0.6961663,B2=0.4079426,B3=0.8974794;
+      const C1=0.0684043**2,C2=0.1162414**2,C3=9.896161**2;
+      const l2=wl*wl;
+      return Math.sqrt(1+B1*l2/(l2-C1)+B2*l2/(l2-C2)+B3*l2/(l2-C3));
+    }
+    function slabFundamentalTE(wl, d, nC, nCl) {
+      if (nC <= nCl) return null;
+      const k0 = 2*Math.PI/wl, a = d/2;
+      const V = k0*a*Math.sqrt(nC*nC - nCl*nCl);
+      const upper = Math.min(Math.PI/2 - 1e-9, V - 1e-12);
+      if (upper <= 0) return null;
+      const f = (u) => { const w = Math.sqrt(Math.max(V*V - u*u, 0)); return u*Math.tan(u) - w; };
+      let lo = 1e-9, hi = upper, flo = f(lo), fhi = f(hi);
+      if (flo*fhi > 0) return null;
+      for (let i = 0; i < 100; i++) {
+        const mid = 0.5*(lo+hi), fmid = f(mid);
+        if (flo*fmid <= 0) { hi = mid; fhi = fmid; }
+        else { lo = mid; flo = fmid; }
+        if (hi - lo < 1e-13) break;
+      }
+      const u = 0.5*(lo+hi), w = Math.sqrt(Math.max(V*V - u*u, 0));
+      return { kappa: u/a, gamma: w/a, nEff: Math.sqrt(nC*nC - (u/a/k0)**2) };
+    }
+    function kappaNeff(wl, W, H, dl, gap) {
+      const nC = nSilica(wl), nCl = nC*(1-dl/100);
+      const v = slabFundamentalTE(wl, H, nC, nCl); if (!v) return null;
+      const h = slabFundamentalTE(wl, W, v.nEff, nCl); if (!h) return null;
+      const k0 = 2*Math.PI/wl, beta = h.nEff*k0, a = W/2, h2 = h.kappa*h.kappa;
+      return { kappa: 2*h2*h.gamma*Math.exp(-h.gamma*gap)/(beta*(h2+h.gamma*h.gamma)*(1+h.gamma*a)), nEff: h.nEff };
+    }
+    function latticePbar(wl, W, H, dl, gap, Ls, dL) {
+      const kn = kappaNeff(wl, W, H, dl, gap);
+      if (!kn) return null;
+      const dphi = (2*Math.PI*kn.nEff/wl) * dL;
+      const cp = Math.cos(dphi), sp = Math.sin(dphi);
+      let uR=1, uI=0, vR=0, vI=0;
+      const N = Ls.length - 1;
+      for (let k = 0; k <= N; k++) {
+        const theta = kn.kappa * Ls[k];
+        const c = Math.cos(theta), s = Math.sin(theta);
+        const nuR = c*uR + s*vI;
+        const nuI = c*uI - s*vR;
+        const nvR = c*vR + s*uI;
+        const nvI = c*vI - s*uR;
+        uR = nuR; uI = nuI; vR = nvR; vI = nvI;
+        if (k < N) {
+          const nvR2 = vR*cp + vI*sp;
+          const nvI2 = -vR*sp + vI*cp;
+          vR = nvR2; vI = nvI2;
+        }
+      }
+      return uR*uR + uI*uI;
+    }
+
+    // ---- targets ----
+    function bandpassTargets(wlcUm, pbUm) {
+      return [
+        { wl: wlcUm,             target: 1.00, weight: 5 },
+        { wl: wlcUm - pbUm/2,    target: 0.50, weight: 1 },
+        { wl: wlcUm + pbUm/2,    target: 0.50, weight: 1 },
+        { wl: wlcUm - pbUm,      target: 0.05, weight: 2 },
+        { wl: wlcUm + pbUm,      target: 0.05, weight: 2 },
+        { wl: wlcUm - 2*pbUm,    target: 0.00, weight: 1 },
+        { wl: wlcUm + 2*pbUm,    target: 0.00, weight: 1 },
+      ];
+    }
+
+    function refreshTargetTable() {
+      const wlcNm = parseFloat(document.getElementById('wlcNm').value);
+      const pbNm  = parseFloat(document.getElementById('pbNm').value);
+      const tgts = bandpassTargets(wlcNm/1000, pbNm/1000);
+      const tb = document.getElementById('tBody');
+      tb.innerHTML = '';
+      tgts.forEach(t => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${(t.wl*1000).toFixed(3)}</td><td>${t.target.toFixed(2)}</td><td>${t.weight.toFixed(1)}</td>`;
+        tb.appendChild(tr);
+      });
+      return tgts;
+    }
+
+    // ---- optimization ----
+    function mulberry32(seed) {
+      let s = seed >>> 0;
+      return function() {
+        s = (s + 0x6D2B79F5) >>> 0;
+        let t = s;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+    function nelderMead(f, x0, maxIter=400) {
+      const n = x0.length;
+      let simp = [x0.slice()];
+      for (let i = 0; i < n; i++) {
+        const xi = x0.slice();
+        const step = Math.abs(xi[i]) > 1e-6 ? Math.abs(xi[i])*0.05 : 0.001;
+        xi[i] += step;
+        simp.push(xi);
+      }
+      let fv = simp.map(x => f(x));
+      for (let it = 0; it < maxIter; it++) {
+        const order = [...Array(n+1).keys()].sort((a,b) => fv[a] - fv[b]);
+        simp = order.map(i => simp[i]); fv = order.map(i => fv[i]);
+        if (fv[n] - fv[0] < 1e-10) break;
+        const c = new Array(n).fill(0);
+        for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) c[j] += simp[i][j]/n;
+        const xr = c.map((cj,j) => cj + (cj - simp[n][j]));
+        const fr = f(xr);
+        if (fv[0] <= fr && fr < fv[n-1]) { simp[n] = xr; fv[n] = fr; continue; }
+        if (fr < fv[0]) {
+          const xe = c.map((cj,j) => cj + 2*(xr[j] - cj));
+          const fe = f(xe);
+          if (fe < fr) { simp[n] = xe; fv[n] = fe; } else { simp[n] = xr; fv[n] = fr; }
+          continue;
+        }
+        const xc = c.map((cj,j) => cj + 0.5*(simp[n][j] - cj));
+        const fc = f(xc);
+        if (fc < fv[n]) { simp[n] = xc; fv[n] = fc; continue; }
+        for (let i = 1; i <= n; i++) {
+          simp[i] = simp[0].map((x0j,j) => x0j + 0.5*(simp[i][j] - x0j));
+          fv[i] = f(simp[i]);
+        }
+      }
+      const order = [...Array(n+1).keys()].sort((a,b) => fv[a] - fv[b]);
+      return { x: simp[order[0]], f: fv[order[0]] };
+    }
+
+    function optimize(W, H, dl, gap, N, targets, bounds, nStarts, seed) {
+      const rng = mulberry32(seed);
+      const clip = (x) => x.map((xi, i) => Math.max(bounds[i][0], Math.min(bounds[i][1], xi)));
+      const cost = (x) => {
+        const xc = clip(x);
+        let penalty = 0;
+        for (let i = 0; i < x.length; i++) {
+          const range = Math.max(bounds[i][1] - bounds[i][0], 1e-12);
+          penalty += 0.001 * ((x[i] - xc[i]) / range) ** 2;
+        }
+        const Ls = xc.slice(0, N+1);
+        const dL = xc[N+1];
+        let s = 0;
+        for (const t of targets) {
+          const p = latticePbar(t.wl, W, H, dl, gap, Ls, dL);
+          if (p === null) return 1e6;
+          s += t.weight * (p - t.target) ** 2;
+        }
+        return s + penalty;
+      };
+      let best = null, bestC = Infinity;
+      for (let s = 0; s < nStarts; s++) {
+        const x0 = bounds.map(([lo, hi]) => lo + rng()*(hi - lo));
+        const r = nelderMead(cost, x0, 400);
+        const xc = clip(r.x);
+        const c = cost(xc);
+        if (c < bestC) { bestC = c; best = xc; }
+      }
+      return { params: best, cost: bestC };
+    }
+
+    // ---- UI ----
+    ['wlcNm','pbNm'].forEach(id => document.getElementById(id).addEventListener('input', refreshTargetTable));
+    refreshTargetTable();
+
+    document.getElementById('btnRun').addEventListener('click', () => {
+      const btn = document.getElementById('btnRun');
+      const status = document.getElementById('status');
+      btn.disabled = true; status.textContent = 'Optimizing…';
+      setTimeout(() => {
+        const W   = parseFloat(document.getElementById('W').value);
+        const H   = parseFloat(document.getElementById('H').value);
+        const dl  = parseFloat(document.getElementById('delta').value);
+        const gap = parseFloat(document.getElementById('gap').value);
+        const wlcNm = parseFloat(document.getElementById('wlcNm').value);
+        const pbNm  = parseFloat(document.getElementById('pbNm').value);
+        const N   = Math.max(1, Math.min(6, parseInt(document.getElementById('nStages').value) || 3));
+        const targets = bandpassTargets(wlcNm/1000, pbNm/1000);
+        const LMin = parseFloat(document.getElementById('LMin').value);
+        const LMax = parseFloat(document.getElementById('LMax').value);
+        const dLMin = parseFloat(document.getElementById('dLMin').value);
+        const dLMax = parseFloat(document.getElementById('dLMax').value);
+        const bounds = [];
+        for (let i = 0; i <= N; i++) bounds.push([LMin, LMax]);
+        bounds.push([dLMin, dLMax]);
+        const nStarts = Math.max(1, Math.min(500, parseInt(document.getElementById('nStarts').value) || 80));
+        const seed    = parseInt(document.getElementById('seed').value) || 1;
+
+        const t0 = performance.now();
+        const r = optimize(W, H, dl, gap, N, targets, bounds, nStarts, seed);
+        const dt = (performance.now() - t0) / 1000;
+
+        const Ls = r.params.slice(0, N+1);
+        const dL = r.params[N+1];
+
+        // populate results
+        const knC = kappaNeff(wlcNm/1000, W, H, dl, gap);
+        const fsrUm = knC ? (wlcNm/1000)**2 / (knC.nEff * dL) : null;
+        const div = document.getElementById('results');
+        let html = '';
+        for (let i = 0; i <= N; i++) {
+          const theta = knC ? knC.kappa*Ls[i] : null;
+          const thetaStr = theta !== null ? `${Ls[i].toFixed(3)} μm  (κL=${theta.toFixed(3)} rad, ${(theta*180/Math.PI).toFixed(2)}°)` : Ls[i].toFixed(3) + ' μm';
+          html += `<div class="key">DC${i} L</div><div class="val primary">${thetaStr}</div>`;
+        }
+        html += `<div class="key">ΔL (per stage)</div><div class="val primary">${dL.toFixed(3)} μm</div>`;
+        html += `<div class="key">n_eff at λ_c</div><div class="val">${knC ? knC.nEff.toFixed(6) : '—'}</div>`;
+        html += `<div class="key">FSR at λ_c</div><div class="val">${fsrUm ? (fsrUm*1000).toFixed(4) + ' nm' : '—'}</div>`;
+        html += `<div class="key">Best cost</div><div class="val">${r.cost.toExponential(3)}</div>`;
+        div.innerHTML = html;
+
+        status.textContent = `Done in ${dt.toFixed(2)} s. Best cost: ${r.cost.toExponential(3)}.`;
+        drawSpectrum(W, H, dl, gap, Ls, dL, targets, wlcNm/1000, pbNm/1000);
+        btn.disabled = false;
+      }, 30);
+    });
+
+    function drawSpectrum(W, H, dl, gap, Ls, dL, targets, wlcUm, pbUm) {
+      const canvas = document.getElementById('chart');
+      const dpr = window.devicePixelRatio || 1;
+      const cssW = canvas.clientWidth || 880;
+      const cssH = 380;
+      canvas.width = cssW*dpr; canvas.height = cssH*dpr;
+      canvas.style.height = cssH + 'px';
+      const ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+      const fg = getComputedStyle(document.documentElement).getPropertyValue('--fg').trim();
+      const muted = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim();
+      const border = getComputedStyle(document.documentElement).getPropertyValue('--card-border').trim();
+
+      const margin = { l: 60, r: 20, t: 20, b: 50 };
+      const Wp = cssW - margin.l - margin.r;
+      const Hp = cssH - margin.t - margin.b;
+
+      const wlMin = wlcUm - 5*pbUm;
+      const wlMax = wlcUm + 5*pbUm;
+      const xs = (wl) => margin.l + ((wl - wlMin) / (wlMax - wlMin)) * Wp;
+      const ys = (p) => margin.t + (1 - p) * Hp;
+
+      // grid
+      ctx.strokeStyle = border; ctx.font = '11px -apple-system, sans-serif';
+      ctx.fillStyle = muted; ctx.setLineDash([3,3]);
+      [0, 0.25, 0.5, 0.75, 1.0].forEach(p => {
+        const y = ys(p);
+        ctx.beginPath(); ctx.moveTo(margin.l, y); ctx.lineTo(margin.l + Wp, y); ctx.stroke();
+        ctx.fillText(p.toFixed(2), 28, y + 4);
+      });
+      for (let i = 0; i <= 5; i++) {
+        const wl = wlMin + (wlMax - wlMin) * i/5;
+        const x = xs(wl);
+        ctx.beginPath(); ctx.moveTo(x, margin.t); ctx.lineTo(x, margin.t + Hp); ctx.stroke();
+        ctx.fillText((wl*1000).toFixed(3), x - 18, margin.t + Hp + 14);
+      }
+      ctx.setLineDash([]);
+      ctx.strokeStyle = fg;
+      ctx.beginPath();
+      ctx.moveTo(margin.l, margin.t); ctx.lineTo(margin.l, margin.t + Hp);
+      ctx.lineTo(margin.l + Wp, margin.t + Hp); ctx.stroke();
+      ctx.fillStyle = fg; ctx.font = '13px -apple-system, sans-serif';
+      ctx.fillText('λ (nm)', margin.l + Wp - 50, margin.t + Hp + 36);
+      ctx.save();
+      ctx.translate(15, margin.t + Hp/2); ctx.rotate(-Math.PI/2);
+      ctx.fillText('Power', -20, 0); ctx.restore();
+
+      // spectrum lines
+      const Npts = 800;
+      ctx.strokeStyle = '#1971c2'; ctx.lineWidth = 2;
+      ctx.beginPath();
+      let started = false;
+      for (let i = 0; i <= Npts; i++) {
+        const wl = wlMin + (wlMax - wlMin) * i/Npts;
+        const p = latticePbar(wl, W, H, dl, gap, Ls, dL);
+        if (p === null) { started = false; continue; }
+        const x = xs(wl), y = ys(p);
+        if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      ctx.strokeStyle = '#e03131'; ctx.lineWidth = 2;
+      ctx.beginPath();
+      started = false;
+      for (let i = 0; i <= Npts; i++) {
+        const wl = wlMin + (wlMax - wlMin) * i/Npts;
+        const p = latticePbar(wl, W, H, dl, gap, Ls, dL);
+        if (p === null) { started = false; continue; }
+        const x = xs(wl), y = ys(1 - p);
+        if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      // target markers
+      for (const t of targets) {
+        if (t.wl < wlMin || t.wl > wlMax) continue;
+        const x = xs(t.wl);
+        ctx.fillStyle = '#000';
+        const yT = ys(t.target);
+        ctx.beginPath(); ctx.arc(x, yT, 5, 0, 2*Math.PI); ctx.fill();
+        ctx.strokeStyle = '#000';
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath(); ctx.moveTo(x, margin.t); ctx.lineTo(x, margin.t + Hp); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // center / passband markers
+      ctx.strokeStyle = muted; ctx.setLineDash([5, 3]);
+      [wlcUm - pbUm/2, wlcUm + pbUm/2].forEach(wl => {
+        const x = xs(wl);
+        ctx.beginPath(); ctx.moveTo(x, margin.t); ctx.lineTo(x, margin.t + Hp); ctx.stroke();
+      });
+      ctx.setLineDash([]);
+
+      // legend
+      const lx = margin.l + Wp - 110, ly = margin.t + 14;
+      ctx.fillStyle = '#1971c2'; ctx.fillRect(lx, ly - 8, 14, 3);
+      ctx.fillStyle = fg; ctx.fillText('P_bar', lx + 18, ly - 2);
+      ctx.fillStyle = '#e03131'; ctx.fillRect(lx, ly + 8, 14, 3);
+      ctx.fillStyle = fg; ctx.fillText('P_cross', lx + 18, ly + 14);
+      ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(lx + 7, ly + 26, 5, 0, 2*Math.PI); ctx.fill();
+      ctx.fillStyle = fg; ctx.fillText('target', lx + 18, ly + 30);
+    }
+  </script>
+</body>
+</html>
