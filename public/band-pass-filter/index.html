@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bandpass Filter — Asymmetric MZI</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #ffffff;
+      --fg: #1a1a1a;
+      --muted: #666;
+      --card-bg: #f7f7f9;
+      --card-border: #e1e1e6;
+      --accent: #3b5bdb;
+      --input-bg: #ffffff;
+      --core: #4263eb;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0e0e10;
+        --fg: #e8e8ea;
+        --muted: #9a9aa3;
+        --card-bg: #1a1a1e;
+        --card-border: #2a2a30;
+        --accent: #748ffc;
+        --input-bg: #14141a;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0 auto; max-width: 920px; padding: 1.5rem;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg); color: var(--fg); line-height: 1.6;
+    }
+    .back { display: inline-block; margin-bottom: 1rem; color: var(--muted); text-decoration: none; }
+    .back:hover { text-decoration: underline; color: var(--accent); }
+    h1 { margin-bottom: 0.25rem; letter-spacing: -0.02em; }
+    .subtitle { color: var(--muted); margin-top: 0; }
+    .panel {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0;
+    }
+    .panel h3 { margin: 0 0 1rem; font-size: 0.95rem; color: var(--muted); font-weight: 600; }
+    .form-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem;
+    }
+    label { display: flex; flex-direction: column; font-size: 0.9rem; color: var(--muted); }
+    label span.unit { font-size: 0.8rem; }
+    input[type=number] {
+      margin-top: 0.35rem; padding: 0.55rem 0.75rem; font-size: 1rem;
+      background: var(--input-bg); color: var(--fg); border: 1px solid var(--card-border);
+      border-radius: 8px; font-variant-numeric: tabular-nums;
+    }
+    input[type=number]:focus { outline: none; border-color: var(--accent); }
+    .results {
+      display: grid; grid-template-columns: 1fr auto;
+      gap: 0.4rem 1.5rem; font-variant-numeric: tabular-nums;
+    }
+    .results .key { color: var(--muted); }
+    .results .val { font-weight: 600; }
+    .results .val.primary { color: var(--accent); font-size: 1.1rem; }
+    .note { color: var(--muted); font-size: 0.85rem; margin: 0.75rem 0 0; }
+    .warn { color: #e8590c; }
+    canvas { width: 100%; display: block; background: var(--input-bg); border-radius: 8px; }
+    .links a { display: inline-block; margin-right: 1rem; color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+    .links a:hover { text-decoration: underline; }
+    .formula {
+      background: var(--card-bg); border-left: 3px solid var(--accent);
+      padding: 0.75rem 1rem; margin: 0.75rem 0; font-size: 0.9rem;
+    }
+    footer { margin-top: 2rem; color: var(--muted); font-size: 0.85rem; text-align: center; }
+  </style>
+</head>
+<body>
+  <a class="back" href="../">← Home</a>
+  <h1>Bandpass Filter — Asymmetric MZI</h1>
+  <p class="subtitle">Set the waveguide, FSR, center wavelength and passband; the tool designs a two-directional-coupler asymmetric MZI (path difference ΔL) and plots its spectrum.</p>
+
+  <div class="panel">
+    <h3>Waveguide</h3>
+    <div class="form-grid">
+      <label>WG width W <span class="unit">(μm)</span>
+        <input type="number" id="W" value="5.0" step="0.1" min="0.05" /></label>
+      <label>WG height H <span class="unit">(μm)</span>
+        <input type="number" id="H" value="5.0" step="0.1" min="0.05" /></label>
+      <label>Δ index contrast <span class="unit">(%)</span>
+        <input type="number" id="delta" value="0.75" step="0.05" min="0.001" max="50" /></label>
+      <label>DC gap <span class="unit">(μm)</span>
+        <input type="number" id="gap" value="5.0" step="0.5" min="0.1" /></label>
+    </div>
+    <h3 style="margin-top:1.25rem;">Filter spec</h3>
+    <div class="form-grid">
+      <label>Center λ꜀ <span class="unit">(μm)</span>
+        <input type="number" id="lamC" value="1.55" step="0.01" min="0.21" max="6.7" /></label>
+      <label>FSR <span class="unit">(nm)</span>
+        <input type="number" id="fsr" value="1.6" step="0.1" min="0.01" /></label>
+      <label>Passband −3 dB <span class="unit">(nm)</span>
+        <input type="number" id="pb" value="0.6" step="0.05" min="0.001" /></label>
+      <label>Span <span class="unit">(× FSR)</span>
+        <input type="number" id="span" value="3" step="0.5" min="0.5" max="20" /></label>
+      <label>Samples
+        <input type="number" id="Npts" value="700" step="50" min="50" max="4000" /></label>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>Designed asymmetric MZI</h3>
+    <div class="results">
+      <div class="key">n_eff (at λ꜀)</div><div class="val" id="ne">—</div>
+      <div class="key">κ (at λ꜀)</div><div class="val" id="kap">—</div>
+      <div class="key">Path difference ΔL</div><div class="val primary" id="dL">—</div>
+      <div class="key">ΔL in wavelengths (m)</div><div class="val" id="mord">—</div>
+      <div class="key">DC1 = DC2 coupling length L_DC</div><div class="val primary" id="ldc">—</div>
+      <div class="key">Coupler angle κ·L_DC</div><div class="val" id="theta">—</div>
+      <div class="key">FSR (achieved)</div><div class="val" id="fsrA">—</div>
+      <div class="key">Passband −3 dB (achieved)</div><div class="val" id="pbA">—</div>
+      <div class="key">Peak transmission (cross)</div><div class="val" id="peak">—</div>
+    </div>
+    <p class="note" id="msg"></p>
+  </div>
+
+  <div class="panel">
+    <p style="color: var(--muted); margin-top: 0;">Top: schematic (DC1 — ΔL arm — DC2). Bottom: spectrum — passband on the <span style="color:#e03131;">cross</span> port, complementary <span style="color:#1971c2;">bar</span> port; shaded band = requested passband around λ꜀, dashed line = −3 dB.</p>
+    <canvas id="schematic" height="180"></canvas>
+    <div style="height: 12px;"></div>
+    <canvas id="chart" height="380"></canvas>
+  </div>
+
+  <h2>How it works</h2>
+  <div class="formula">
+    Each DC: T = [[cos(κL), −j sin(κL)], [−j sin(κL), cos(κL)]]; arm phase Δφ = (2π·n_eff/λ)·ΔL
+  </div>
+  <div class="formula">
+    P_bar = |cos(κL₁)cos(κL₂) − sin(κL₁)sin(κL₂)·e<sup>−jΔφ</sup>|²,&nbsp; P_cross = 1 − P_bar
+  </div>
+  <div class="formula">
+    Equal couplers ⇒ P_cross = sin²(2κL)·cos²(Δφ/2): a bandpass on the cross port.
+  </div>
+  <div class="formula">
+    <b>FSR</b> → ΔL = λ꜀²/(n_eff·FSR), snapped to ΔL = m·λ꜀/n_eff so a peak sits at λ꜀.<br>
+    <b>Passband</b> → κ·L_DC = ½·asin(√½ / cos(π·PB/2FSR)); the absolute −3 dB width spans 0…FSR/2, with peak transmission sin²(2κL) trading off below FSR/2.
+  </div>
+
+  <h2>Reference implementations</h2>
+  <p class="links">
+    <a href="https://github.com/chaktb/pic-project/blob/main/band_pass_filter.py">band_pass_filter.py</a>
+    <a href="https://github.com/chaktb/pic-project/blob/main/BandPassFilter.java">BandPassFilter.java</a>
+  </p>
+
+  <footer>JavaScript matches the Python and Java references.</footer>
+
+  <script>
+    function nSilica(wl) {
+      const B1=0.6961663,B2=0.4079426,B3=0.8974794;
+      const C1=0.0684043**2,C2=0.1162414**2,C3=9.896161**2;
+      const l2=wl*wl;
+      return Math.sqrt(1+B1*l2/(l2-C1)+B2*l2/(l2-C2)+B3*l2/(l2-C3));
+    }
+    function slabFundamentalTE(wl, d, nC, nCl) {
+      if (nC <= nCl) return null;
+      const k0 = 2*Math.PI/wl, a = d/2;
+      const V = k0*a*Math.sqrt(nC*nC - nCl*nCl);
+      const upper = Math.min(Math.PI/2 - 1e-9, V - 1e-12);
+      if (upper <= 0) return null;
+      const f = (u) => { const w = Math.sqrt(Math.max(V*V - u*u, 0)); return u*Math.tan(u) - w; };
+      let lo = 1e-9, hi = upper, flo = f(lo), fhi = f(hi);
+      if (flo*fhi > 0) return null;
+      for (let i = 0; i < 100; i++) {
+        const mid = 0.5*(lo+hi), fmid = f(mid);
+        if (flo*fmid <= 0) { hi = mid; fhi = fmid; }
+        else { lo = mid; flo = fmid; }
+        if (hi - lo < 1e-13) break;
+      }
+      const u = 0.5*(lo+hi), w = Math.sqrt(Math.max(V*V - u*u, 0));
+      return { kappa: u/a, gamma: w/a, nEff: Math.sqrt(nC*nC - (u/a/k0)**2) };
+    }
+    function kappaNeff(wl, W, H, dl, gap) {
+      const nC = nSilica(wl), nCl = nC * (1 - dl/100);
+      const v = slabFundamentalTE(wl, H, nC, nCl); if (!v) return null;
+      const h = slabFundamentalTE(wl, W, v.nEff, nCl); if (!h) return null;
+      const k0 = 2*Math.PI/wl, beta = h.nEff*k0, a = W/2, h2 = h.kappa*h.kappa;
+      const k = 2*h2*h.gamma*Math.exp(-h.gamma*gap) / (beta*(h2+h.gamma*h.gamma)*(1+h.gamma*a));
+      return { kappa: k, nEff: h.nEff };
+    }
+    function mziPower(wl, W, H, dl, gap1, L1, gap2, L2, dL) {
+      const kn1 = kappaNeff(wl, W, H, dl, gap1);
+      const kn2 = kappaNeff(wl, W, H, dl, gap2);
+      if (!kn1 || !kn2) return null;
+      const kL1 = kn1.kappa * L1, kL2 = kn2.kappa * L2;
+      const dphi = (2*Math.PI*kn1.nEff/wl) * dL;
+      const a_ = Math.cos(kL1) * Math.cos(kL2);
+      const b_ = Math.sin(kL1) * Math.sin(kL2);
+      const Pbar = a_*a_ + b_*b_ - 2*a_*b_*Math.cos(dphi);
+      return { nEff: kn1.nEff, Pbar, Pcross: Math.max(0, 1 - Pbar) };
+    }
+
+    // Design the asymmetric MZI from {lamC, FSR, passband}.
+    function designFilter(W, H, dl, gap, lamC, fsrNm, pbNm) {
+      const kn = kappaNeff(lamC, W, H, dl, gap);
+      if (!kn) return null;
+      const kappaC = kn.kappa, neC = kn.nEff;
+      const fsrUm = fsrNm / 1000, pbUm = pbNm / 1000;
+      const dLtarget = lamC*lamC / (neC * fsrUm);
+      const m = Math.max(1, Math.round(neC * dLtarget / lamC));
+      const dL = m * lamC / neC;
+      const fsrAchUm = lamC*lamC / (neC * dL);
+      const rRaw = pbUm / fsrAchUm;
+      const r = Math.min(Math.max(rRaw, 1e-6), 0.5);
+      const theta = 0.5 * Math.asin(Math.min(1, Math.SQRT1_2 / Math.cos(Math.PI * r / 2)));
+      const Ldc = theta / kappaC;
+      const peakT = Math.sin(2*theta)**2;
+      return { kappaC, neC, m, dL, fsrAchUm, theta, Ldc, peakT, r, clamped: rRaw > 0.5 };
+    }
+
+    function compute() {
+      const W    = parseFloat(document.getElementById('W').value);
+      const H    = parseFloat(document.getElementById('H').value);
+      const dl   = parseFloat(document.getElementById('delta').value);
+      const gap  = parseFloat(document.getElementById('gap').value);
+      const lamC = parseFloat(document.getElementById('lamC').value);
+      const fsrNm= parseFloat(document.getElementById('fsr').value);
+      const pbNm = parseFloat(document.getElementById('pb').value);
+      let span   = parseFloat(document.getElementById('span').value);
+      const N    = Math.max(50, Math.min(4000, parseInt(document.getElementById('Npts').value) || 700));
+      if (![W,H,dl,gap,lamC,fsrNm,pbNm,span].every(Number.isFinite) ||
+          W<=0||H<=0||dl<=0||gap<=0||lamC<=0||fsrNm<=0||pbNm<=0||span<=0) return;
+
+      const d = designFilter(W, H, dl, gap, lamC, fsrNm, pbNm);
+      const msg = document.getElementById('msg');
+      if (!d) {
+        ['ne','kap','dL','mord','ldc','theta','fsrA','pbA','peak'].forEach(id =>
+          document.getElementById(id).textContent = '—');
+        msg.textContent = 'No guided mode for this waveguide / wavelength — adjust W, H, Δ or λ꜀.';
+        msg.className = 'note warn';
+        return;
+      }
+
+      const fsrAchNm = d.fsrAchUm * 1000;
+      document.getElementById('ne').textContent   = d.neC.toFixed(6);
+      document.getElementById('kap').textContent  = d.kappaC.toExponential(4) + ' /μm';
+      document.getElementById('dL').textContent   = d.dL.toFixed(3) + ' μm';
+      document.getElementById('mord').textContent = d.m + ' λ';
+      document.getElementById('ldc').textContent  = d.Ldc.toFixed(3) + ' μm';
+      document.getElementById('theta').textContent= d.theta.toFixed(4) + ' rad (' + (d.theta*180/Math.PI).toFixed(2) + '°)';
+      document.getElementById('fsrA').textContent = fsrAchNm.toFixed(4) + ' nm';
+      document.getElementById('pbA').textContent  = (d.r * fsrAchNm).toFixed(4) + ' nm';
+      document.getElementById('peak').textContent = (d.peakT*100).toFixed(2) + ' %';
+
+      if (d.clamped) {
+        msg.className = 'note warn';
+        msg.textContent = 'Requested passband > FSR/2 — clamped to FSR/2 (3 dB couplers). A single MZI cannot make a flat-top passband narrower than this without loss; cascade stages (see Lattice filter) for sharper skirts.';
+      } else if (d.peakT < 0.9) {
+        msg.className = 'note';
+        msg.textContent = 'Passband narrower than FSR/2 requires under-coupled DCs, so peak transmission drops to ' + (d.peakT*100).toFixed(1) + '%. That insertion loss is intrinsic to a single MZI stage.';
+      } else {
+        msg.className = 'note';
+        msg.textContent = '';
+      }
+
+      // Spectrum over lamC ± span/2 · FSR.
+      const half = 0.5 * span * d.fsrAchUm;
+      const wlA = lamC - half, wlB = lamC + half;
+      const wls = [], Pb = [], Pc = [];
+      for (let i = 0; i < N; i++) {
+        const wl = wlA + (wlB - wlA) * i / (N - 1);
+        const r = mziPower(wl, W, H, dl, gap, d.Ldc, gap, d.Ldc, d.dL);
+        wls.push(wl);
+        if (!r) { Pb.push(NaN); Pc.push(NaN); }
+        else { Pb.push(r.Pbar); Pc.push(r.Pcross); }
+      }
+
+      const pbUm = d.r * d.fsrAchUm;
+      drawSchematic(d.Ldc, d.Ldc, d.dL);
+      drawSpectrum(wls, Pb, Pc, wlA, wlB, lamC, pbUm, d.peakT);
+    }
+
+    function drawSchematic(L1, L2, dL) {
+      const canvas = document.getElementById('schematic');
+      const dpr = window.devicePixelRatio || 1;
+      const cssW = canvas.clientWidth || 880, cssH = 180;
+      canvas.width = cssW*dpr; canvas.height = cssH*dpr;
+      canvas.style.height = cssH + 'px';
+      const ctx = canvas.getContext('2d'); ctx.scale(dpr, dpr);
+      const fg = getComputedStyle(document.documentElement).getPropertyValue('--fg').trim();
+      const muted = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim();
+      const core = getComputedStyle(document.documentElement).getPropertyValue('--core').trim() || '#4263eb';
+
+      const margin = { l: 30, r: 30, t: 20, b: 30 };
+      const Wp = cssW - margin.l - margin.r, Hp = cssH - margin.t - margin.b;
+      const yc = margin.t + Hp/2, dy = 30;
+      const yTop = yc - dy, yBot = yc + dy, wgT = 6;
+      const stubPx = Wp * 0.08;
+      const Ltot = L1 + L2, dcSpan = Wp * 0.30;
+      const dc1Px = Math.max(20, dcSpan * (L1 / Ltot));
+      const dc2Px = Math.max(20, dcSpan * (L2 / Ltot));
+      const armPx = Wp - 2*stubPx - dc1Px - dc2Px;
+      const xS = margin.l;
+      const xDC1a = xS + stubPx, xDC1b = xDC1a + dc1Px;
+      const xDC2a = xDC1b + armPx, xDC2b = xDC2a + dc2Px;
+      const xE = xDC2b + stubPx;
+
+      ctx.fillStyle = core;
+      ctx.fillRect(xS, yTop - wgT/2, stubPx, wgT);
+      ctx.fillRect(xS, yBot - wgT/2, stubPx, wgT);
+      // DC1
+      ctx.fillStyle = '#ffd43b88';
+      ctx.fillRect(xDC1a, yTop - wgT/2 - 2, dc1Px, (yBot - yTop) + wgT + 4);
+      ctx.fillStyle = core;
+      ctx.fillRect(xDC1a, yTop - wgT/2, dc1Px, wgT);
+      ctx.fillRect(xDC1a, yBot - wgT/2, dc1Px, wgT);
+      ctx.strokeStyle = fg; ctx.lineWidth = 1;
+      ctx.strokeRect(xDC1a, yTop - wgT/2 - 2, dc1Px, (yBot - yTop) + wgT + 4);
+      // DC2
+      ctx.fillStyle = '#ffd43b88';
+      ctx.fillRect(xDC2a, yTop - wgT/2 - 2, dc2Px, (yBot - yTop) + wgT + 4);
+      ctx.fillStyle = core;
+      ctx.fillRect(xDC2a, yTop - wgT/2, dc2Px, wgT);
+      ctx.fillRect(xDC2a, yBot - wgT/2, dc2Px, wgT);
+      ctx.strokeStyle = fg;
+      ctx.strokeRect(xDC2a, yTop - wgT/2 - 2, dc2Px, (yBot - yTop) + wgT + 4);
+      // Arms + dL bump on the bottom arm
+      ctx.fillStyle = core;
+      ctx.fillRect(xDC1b, yTop - wgT/2, armPx, wgT);
+      ctx.fillRect(xDC1b, yBot - wgT/2, armPx*0.3, wgT);
+      ctx.fillRect(xDC2a - armPx*0.3, yBot - wgT/2, armPx*0.3, wgT);
+      const bumpH = 12;
+      ctx.beginPath();
+      ctx.moveTo(xDC1b + armPx*0.3, yBot - wgT/2);
+      ctx.lineTo(xDC1b + armPx*0.35, yBot + bumpH - wgT/2);
+      ctx.lineTo(xDC1b + armPx*0.65, yBot + bumpH - wgT/2);
+      ctx.lineTo(xDC1b + armPx*0.7, yBot - wgT/2);
+      ctx.lineTo(xDC1b + armPx*0.7, yBot + wgT/2);
+      ctx.lineTo(xDC1b + armPx*0.65, yBot + bumpH + wgT/2);
+      ctx.lineTo(xDC1b + armPx*0.35, yBot + bumpH + wgT/2);
+      ctx.lineTo(xDC1b + armPx*0.3, yBot + wgT/2);
+      ctx.closePath(); ctx.fill();
+      // Output stubs
+      ctx.fillRect(xDC2b, yTop - wgT/2, stubPx, wgT);
+      ctx.fillRect(xDC2b, yBot - wgT/2, stubPx, wgT);
+
+      ctx.fillStyle = fg; ctx.font = '12px -apple-system, sans-serif';
+      ctx.fillText('input', xS, yTop - 8);
+      ctx.fillText('bar', xE - 22, yTop - 8);
+      ctx.fillText('cross (passband)', xE - 96, yBot + 22);
+      ctx.fillStyle = muted; ctx.font = '11px -apple-system, sans-serif';
+      ctx.fillText('DC1 (L=' + L1.toFixed(0) + ')', xDC1a, margin.t + 12);
+      ctx.fillText('DC2 (L=' + L2.toFixed(0) + ')', xDC2a, margin.t + 12);
+      ctx.fillText('+ΔL = ' + dL.toFixed(1) + ' μm', xDC1b + armPx/2 - 38, yBot + bumpH + 22);
+    }
+
+    function drawSpectrum(wls, Pb, Pc, wlA, wlB, lamC, pbUm, peakT) {
+      const canvas = document.getElementById('chart');
+      const dpr = window.devicePixelRatio || 1;
+      const cssW = canvas.clientWidth || 880, cssH = 380;
+      canvas.width = cssW*dpr; canvas.height = cssH*dpr;
+      canvas.style.height = cssH + 'px';
+      const ctx = canvas.getContext('2d'); ctx.scale(dpr, dpr);
+      const fg = getComputedStyle(document.documentElement).getPropertyValue('--fg').trim();
+      const muted = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim();
+      const border = getComputedStyle(document.documentElement).getPropertyValue('--card-border').trim();
+
+      const margin = { l: 60, r: 20, t: 20, b: 50 };
+      const Wp = cssW - margin.l - margin.r, Hp = cssH - margin.t - margin.b;
+      const xs = (wl) => margin.l + ((wl - wlA) / (wlB - wlA)) * Wp;
+      const ys = (p) => margin.t + (1 - p) * Hp;
+
+      // Requested passband window around lamC
+      const xPbA = xs(lamC - pbUm/2), xPbB = xs(lamC + pbUm/2);
+      ctx.fillStyle = 'rgba(224,49,49,0.10)';
+      ctx.fillRect(xPbA, margin.t, Math.max(1, xPbB - xPbA), Hp);
+
+      // Grid
+      ctx.strokeStyle = border; ctx.font = '11px -apple-system, sans-serif';
+      ctx.fillStyle = muted; ctx.setLineDash([3, 3]);
+      [0, 0.25, 0.5, 0.75, 1.0].forEach(p => {
+        const y = ys(p);
+        ctx.beginPath(); ctx.moveTo(margin.l, y); ctx.lineTo(margin.l + Wp, y); ctx.stroke();
+        ctx.fillText(p.toFixed(2), 28, y + 4);
+      });
+      const dWl = wlB - wlA, steps = 5;
+      for (let i = 0; i <= steps; i++) {
+        const wl = wlA + dWl * i / steps, x = xs(wl);
+        ctx.beginPath(); ctx.moveTo(x, margin.t); ctx.lineTo(x, margin.t + Hp); ctx.stroke();
+        ctx.fillText(wl.toFixed(4), x - 16, margin.t + Hp + 14);
+      }
+      ctx.setLineDash([]);
+
+      // -3 dB (0.5) line
+      ctx.strokeStyle = '#e8590c'; ctx.setLineDash([6, 4]);
+      ctx.beginPath(); ctx.moveTo(margin.l, ys(0.5)); ctx.lineTo(margin.l + Wp, ys(0.5)); ctx.stroke();
+      ctx.setLineDash([]);
+      // center wavelength marker
+      ctx.strokeStyle = muted; ctx.setLineDash([2, 3]);
+      ctx.beginPath(); ctx.moveTo(xs(lamC), margin.t); ctx.lineTo(xs(lamC), margin.t + Hp); ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Axes
+      ctx.strokeStyle = fg;
+      ctx.beginPath();
+      ctx.moveTo(margin.l, margin.t); ctx.lineTo(margin.l, margin.t + Hp);
+      ctx.lineTo(margin.l + Wp, margin.t + Hp); ctx.stroke();
+      ctx.fillStyle = fg; ctx.font = '13px -apple-system, sans-serif';
+      ctx.fillText('λ (μm)', margin.l + Wp - 50, margin.t + Hp + 36);
+      ctx.save();
+      ctx.translate(15, margin.t + Hp/2); ctx.rotate(-Math.PI/2);
+      ctx.fillText('Power', -20, 0); ctx.restore();
+
+      const drawLine = (arr, color) => {
+        ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath();
+        let started = false;
+        for (let i = 0; i < wls.length; i++) {
+          if (!Number.isFinite(arr[i])) { started = false; continue; }
+          const x = xs(wls[i]), y = ys(arr[i]);
+          if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      };
+      drawLine(Pb, '#1971c2');   // bar
+      drawLine(Pc, '#e03131');   // cross = passband
+
+      // Legend
+      const lx = margin.l + Wp - 150, ly = margin.t + 14;
+      ctx.fillStyle = '#e03131'; ctx.fillRect(lx, ly - 8, 14, 3);
+      ctx.fillStyle = fg; ctx.fillText('cross (passband)', lx + 18, ly - 2);
+      ctx.fillStyle = '#1971c2'; ctx.fillRect(lx, ly + 8, 14, 3);
+      ctx.fillStyle = fg; ctx.fillText('bar', lx + 18, ly + 14);
+    }
+
+    ['W','H','delta','gap','lamC','fsr','pb','span','Npts'].forEach(id => {
+      document.getElementById(id).addEventListener('input', compute);
+    });
+    window.addEventListener('resize', compute);
+    compute();
+  </script>
+</body>
+</html>
