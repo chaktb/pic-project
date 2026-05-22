@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tunable Bandpass Filter — NiCr Heater</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #ffffff;
+      --fg: #1a1a1a;
+      --muted: #666;
+      --card-bg: #f7f7f9;
+      --card-border: #e1e1e6;
+      --accent: #3b5bdb;
+      --input-bg: #ffffff;
+      --core: #4263eb;
+      --heat: #e8590c;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0e0e10;
+        --fg: #e8e8ea;
+        --muted: #9a9aa3;
+        --card-bg: #1a1a1e;
+        --card-border: #2a2a30;
+        --accent: #748ffc;
+        --input-bg: #14141a;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0 auto; max-width: 920px; padding: 1.5rem;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg); color: var(--fg); line-height: 1.6;
+    }
+    .back { display: inline-block; margin-bottom: 1rem; color: var(--muted); text-decoration: none; }
+    .back:hover { text-decoration: underline; color: var(--accent); }
+    h1 { margin-bottom: 0.25rem; letter-spacing: -0.02em; }
+    .subtitle { color: var(--muted); margin-top: 0; }
+    .panel {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0;
+    }
+    .panel h3 { margin: 0 0 1rem; font-size: 0.95rem; color: var(--muted); font-weight: 600; }
+    .form-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem;
+    }
+    label { display: flex; flex-direction: column; font-size: 0.9rem; color: var(--muted); }
+    label span.unit { font-size: 0.8rem; }
+    input[type=number] {
+      margin-top: 0.35rem; padding: 0.55rem 0.75rem; font-size: 1rem;
+      background: var(--input-bg); color: var(--fg); border: 1px solid var(--card-border);
+      border-radius: 8px; font-variant-numeric: tabular-nums;
+    }
+    input[type=number]:focus { outline: none; border-color: var(--accent); }
+    .heater-control { margin-top: 1.25rem; }
+    .heater-control .vrow { display: flex; align-items: center; gap: 1rem; }
+    .heater-control input[type=range] { flex: 1; accent-color: var(--heat); }
+    .heater-control .vval { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 5.5rem; text-align: right; color: var(--heat); }
+    .results {
+      display: grid; grid-template-columns: 1fr auto;
+      gap: 0.4rem 1.5rem; font-variant-numeric: tabular-nums;
+    }
+    .results .key { color: var(--muted); }
+    .results .val { font-weight: 600; }
+    .results .val.primary { color: var(--accent); font-size: 1.1rem; }
+    .results .val.heat { color: var(--heat); }
+    .note { color: var(--muted); font-size: 0.85rem; margin: 0.75rem 0 0; }
+    .warn { color: #e8590c; }
+    canvas { width: 100%; display: block; background: var(--input-bg); border-radius: 8px; }
+    .links a { display: inline-block; margin-right: 1rem; color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+    .links a:hover { text-decoration: underline; }
+    .formula {
+      background: var(--card-bg); border-left: 3px solid var(--accent);
+      padding: 0.75rem 1rem; margin: 0.75rem 0; font-size: 0.9rem;
+    }
+    footer { margin-top: 2rem; color: var(--muted); font-size: 0.85rem; text-align: center; }
+  </style>
+</head>
+<body>
+  <a class="back" href="../">← Home</a>
+  <h1>Tunable Bandpass Filter — NiCr Heater</h1>
+  <p class="subtitle">Center wavelength is fixed by ΔL. A NiCr thin-film heater raises the coupler temperature (thermo-optic), tuning the coupling angle and therefore only the passband <i>width</i> — the center never moves.</p>
+
+  <div class="panel">
+    <h3>Waveguide</h3>
+    <div class="form-grid">
+      <label>WG width W <span class="unit">(μm)</span>
+        <input type="number" id="W" value="5.0" step="0.1" min="0.05" /></label>
+      <label>WG height H <span class="unit">(μm)</span>
+        <input type="number" id="H" value="5.0" step="0.1" min="0.05" /></label>
+      <label>Δ index contrast <span class="unit">(%)</span>
+        <input type="number" id="delta" value="0.75" step="0.05" min="0.001" max="50" /></label>
+      <label>DC gap <span class="unit">(μm)</span>
+        <input type="number" id="gap" value="5.0" step="0.5" min="0.1" /></label>
+    </div>
+    <h3 style="margin-top:1.25rem;">Filter spec (center fixed)</h3>
+    <div class="form-grid">
+      <label>Center λ꜀ <span class="unit">(μm, FIXED)</span>
+        <input type="number" id="lamC" value="1.55" step="0.01" min="0.21" max="6.7" /></label>
+      <label>FSR <span class="unit">(nm)</span>
+        <input type="number" id="fsr" value="1.6" step="0.1" min="0.01" /></label>
+      <label>Base passband <span class="unit">(nm, V=0)</span>
+        <input type="number" id="pb" value="0.3" step="0.05" min="0.001" /></label>
+      <label>Span <span class="unit">(× FSR)</span>
+        <input type="number" id="span" value="3" step="0.5" min="0.5" max="20" /></label>
+      <label>Samples
+        <input type="number" id="Npts" value="700" step="50" min="50" max="4000" /></label>
+    </div>
+    <h3 style="margin-top:1.25rem;">NiCr thin-film heater</h3>
+    <div class="form-grid">
+      <label>ρ NiCr <span class="unit">(Ω·m)</span>
+        <input type="number" id="rho" value="1.1e-6" step="1e-7" min="1e-8" /></label>
+      <label>Heater width <span class="unit">(μm)</span>
+        <input type="number" id="wh" value="4.0" step="0.5" min="0.2" /></label>
+      <label>Film thickness <span class="unit">(μm)</span>
+        <input type="number" id="th" value="0.1" step="0.02" min="0.01" /></label>
+      <label>Thermal R_th <span class="unit">(K/W)</span>
+        <input type="number" id="rth" value="2000" step="100" min="1" /></label>
+      <label>dn/dT <span class="unit">(1/K)</span>
+        <input type="number" id="dndt" value="1.0e-5" step="1e-6" min="1e-7" /></label>
+    </div>
+    <div class="heater-control">
+      <label style="color:var(--heat);font-weight:600;">Heater voltage V</label>
+      <div class="vrow">
+        <input type="range" id="Vrange" min="0" max="12" step="0.05" value="0" />
+        <input type="number" id="V" value="0" step="0.1" min="0" style="width:5.5rem;" />
+        <span class="vval" id="vlabel">0.00 V</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>Heater state &amp; designed filter</h3>
+    <div class="results">
+      <div class="key">Center λ꜀ (locked)</div><div class="val primary" id="ctr">—</div>
+      <div class="key">Path difference ΔL</div><div class="val" id="dL">—</div>
+      <div class="key">L_DC = heater length</div><div class="val" id="ldc">—</div>
+      <div class="key">Heater resistance R</div><div class="val heat" id="R">—</div>
+      <div class="key">Power P = V²/R</div><div class="val heat" id="P">—</div>
+      <div class="key">Temperature rise ΔT</div><div class="val heat" id="dT">—</div>
+      <div class="key">Thermo-optic Δn</div><div class="val heat" id="dn">—</div>
+      <div class="key">Coupler angle θ(T)</div><div class="val" id="theta">—</div>
+      <div class="key">Passband −3 dB (base → tuned)</div><div class="val primary" id="pbA">—</div>
+      <div class="key">Peak transmission (cross)</div><div class="val" id="peak">—</div>
+    </div>
+    <p class="note" id="msg"></p>
+  </div>
+
+  <div class="panel">
+    <p style="color: var(--muted); margin-top: 0;">Top: schematic (heater bar over both couplers). Bottom: <span style="color:#e03131;">cross</span> port (passband) at the set voltage, with the <span style="color:#9aa0a6;">V=0 base</span> dashed; the center marker shows λ꜀ stays fixed while heating widens/narrows the band.</p>
+    <canvas id="schematic" height="190"></canvas>
+    <div style="height: 12px;"></div>
+    <canvas id="chart" height="380"></canvas>
+  </div>
+
+  <h2>How it works</h2>
+  <div class="formula">
+    Fixed center: ΔL = m·λ꜀/n_eff (integer m) ⇒ cross peak locked at λ꜀ for all T.
+  </div>
+  <div class="formula">
+    NiCr heater: R = ρ·L_h/(w_h·t_h), P = V²/R, ΔT = R_th·P, Δn = (dn/dT)·ΔT.
+  </div>
+  <div class="formula">
+    Tunable coupler angle: θ(T) = θ_base + π·Δn·L_h/λ꜀. Cross port: P_cross = sin²(2θ)·cos²(Δφ/2).
+  </div>
+  <div class="formula">
+    Passband (−3 dB, absolute): PB = FSR·(2/π)·acos(√(0.5/sin²2θ)), widening to FSR/2 at θ = 45°. Only the width changes with T; λ꜀ is fixed.
+  </div>
+
+  <h2>Reference implementations</h2>
+  <p class="links">
+    <a href="https://github.com/chaktb/pic-project/blob/main/tunable_bandpass.py">tunable_bandpass.py</a>
+    <a href="https://github.com/chaktb/pic-project/blob/main/TunableBandpass.java">TunableBandpass.java</a>
+  </p>
+
+  <footer>JavaScript matches the Python and Java references.</footer>
+
+  <script>
+    function nSilica(wl) {
+      const B1=0.6961663,B2=0.4079426,B3=0.8974794;
+      const C1=0.0684043**2,C2=0.1162414**2,C3=9.896161**2;
+      const l2=wl*wl;
+      return Math.sqrt(1+B1*l2/(l2-C1)+B2*l2/(l2-C2)+B3*l2/(l2-C3));
+    }
+    function slabFundamentalTE(wl, d, nC, nCl) {
+      if (nC <= nCl) return null;
+      const k0 = 2*Math.PI/wl, a = d/2;
+      const V = k0*a*Math.sqrt(nC*nC - nCl*nCl);
+      const upper = Math.min(Math.PI/2 - 1e-9, V - 1e-12);
+      if (upper <= 0) return null;
+      const f = (u) => { const w = Math.sqrt(Math.max(V*V - u*u, 0)); return u*Math.tan(u) - w; };
+      let lo = 1e-9, hi = upper, flo = f(lo), fhi = f(hi);
+      if (flo*fhi > 0) return null;
+      for (let i = 0; i < 100; i++) {
+        const mid = 0.5*(lo+hi), fmid = f(mid);
+        if (flo*fmid <= 0) { hi = mid; fhi = fmid; }
+        else { lo = mid; flo = fmid; }
+        if (hi - lo < 1e-13) break;
+      }
+      const u = 0.5*(lo+hi), w = Math.sqrt(Math.max(V*V - u*u, 0));
+      return { kappa: u/a, gamma: w/a, nEff: Math.sqrt(nC*nC - (u/a/k0)**2) };
+    }
+    function kappaNeff(wl, W, H, dl, gap) {
+      const nC = nSilica(wl), nCl = nC * (1 - dl/100);
+      const v = slabFundamentalTE(wl, H, nC, nCl); if (!v) return null;
+      const h = slabFundamentalTE(wl, W, v.nEff, nCl); if (!h) return null;
+      const k0 = 2*Math.PI/wl, beta = h.nEff*k0, a = W/2, h2 = h.kappa*h.kappa;
+      const k = 2*h2*h.gamma*Math.exp(-h.gamma*gap) / (beta*(h2+h.gamma*h.gamma)*(1+h.gamma*a));
+      return { kappa: k, nEff: h.nEff };
+    }
+    // dtheta = heater-induced extra coupling angle added to each tunable coupler.
+    function mziPower(wl, W, H, dl, gap1, L1, gap2, L2, dL, dtheta) {
+      const kn1 = kappaNeff(wl, W, H, dl, gap1);
+      const kn2 = kappaNeff(wl, W, H, dl, gap2);
+      if (!kn1 || !kn2) return null;
+      const kL1 = kn1.kappa * L1 + dtheta, kL2 = kn2.kappa * L2 + dtheta;
+      const dphi = (2*Math.PI*kn1.nEff/wl) * dL;
+      const a_ = Math.cos(kL1) * Math.cos(kL2);
+      const b_ = Math.sin(kL1) * Math.sin(kL2);
+      const Pbar = a_*a_ + b_*b_ - 2*a_*b_*Math.cos(dphi);
+      return { nEff: kn1.nEff, Pbar, Pcross: Math.max(0, 1 - Pbar) };
+    }
+    function pbFromTheta(theta, fsr) {
+      const peak = Math.sin(2*theta)**2;
+      if (peak <= 0.5) return 0;
+      return fsr * (2/Math.PI) * Math.acos(Math.sqrt(0.5/peak));
+    }
+
+    function designTunable(p) {
+      const kn = kappaNeff(p.lamC, p.W, p.H, p.dl, p.gap);
+      if (!kn) return null;
+      const kappaC = kn.kappa, neC = kn.nEff;
+      const fsrUm = p.fsrNm/1000, basePbUm = p.basePbNm/1000;
+      const dLtarget = p.lamC*p.lamC / (neC * fsrUm);
+      const m = Math.max(1, Math.round(neC * dLtarget / p.lamC));
+      const dL = m * p.lamC / neC;
+      const fsrAchUm = p.lamC*p.lamC / (neC * dL);
+      const r0 = Math.min(Math.max(basePbUm / fsrAchUm, 1e-6), 0.5);
+      const thetaBase = 0.5 * Math.asin(Math.min(1, Math.SQRT1_2 / Math.cos(Math.PI * r0 / 2)));
+      const Ldc = thetaBase / kappaC;
+      // NiCr heater (length = L_DC)
+      const lM = Ldc*1e-6, wM = p.wh*1e-6, tM = p.th*1e-6;
+      const R = p.rho * lM / (wM * tM);
+      const P = R > 0 ? p.V*p.V / R : 0;
+      const dT = p.rth * P;
+      const dn = p.dndt * dT;
+      const dtheta = Math.PI * dn * Ldc / p.lamC;
+      const thetaT = thetaBase + dtheta;
+      return {
+        kappaC, neC, m, dL, fsrAchUm, thetaBase, Ldc, R, P, dT, dn, dtheta, thetaT,
+        peakT: Math.sin(2*thetaT)**2,
+        pbBaseUm: pbFromTheta(thetaBase, fsrAchUm),
+        pbTunedUm: pbFromTheta(thetaT, fsrAchUm),
+      };
+    }
+
+    function readParams() {
+      const g = id => parseFloat(document.getElementById(id).value);
+      return {
+        W:g('W'), H:g('H'), dl:g('delta'), gap:g('gap'),
+        lamC:g('lamC'), fsrNm:g('fsr'), basePbNm:g('pb'),
+        span:g('span'), N:Math.max(50, Math.min(4000, parseInt(document.getElementById('Npts').value)||700)),
+        rho:g('rho'), wh:g('wh'), th:g('th'), rth:g('rth'), dndt:g('dndt'), V:g('V'),
+      };
+    }
+
+    function compute() {
+      const p = readParams();
+      const need = [p.W,p.H,p.dl,p.gap,p.lamC,p.fsrNm,p.basePbNm,p.span,p.rho,p.wh,p.th,p.rth,p.dndt,p.V];
+      if (!need.every(Number.isFinite) || p.W<=0||p.H<=0||p.dl<=0||p.gap<=0||p.lamC<=0||
+          p.fsrNm<=0||p.basePbNm<=0||p.span<=0||p.V<0) return;
+      document.getElementById('vlabel').textContent = p.V.toFixed(2) + ' V';
+
+      const d = designTunable(p);
+      const msg = document.getElementById('msg');
+      if (!d) {
+        ['ctr','dL','ldc','R','P','dT','dn','theta','pbA','peak'].forEach(id =>
+          document.getElementById(id).textContent = '—');
+        msg.textContent = 'No guided mode for this waveguide / wavelength — adjust W, H, Δ or λ꜀.';
+        msg.className = 'note warn';
+        return;
+      }
+      const fsrAchNm = d.fsrAchUm * 1000;
+      document.getElementById('ctr').textContent  = p.lamC.toFixed(4) + ' μm';
+      document.getElementById('dL').textContent   = d.dL.toFixed(3) + ' μm (m=' + d.m + ')';
+      document.getElementById('ldc').textContent  = d.Ldc.toFixed(3) + ' μm';
+      document.getElementById('R').textContent    = d.R.toFixed(2) + ' Ω';
+      document.getElementById('P').textContent    = (d.P*1e3).toFixed(3) + ' mW';
+      document.getElementById('dT').textContent   = d.dT.toFixed(2) + ' K';
+      document.getElementById('dn').textContent   = d.dn.toExponential(3);
+      document.getElementById('theta').textContent= (d.thetaT*180/Math.PI).toFixed(2) + '° (base ' + (d.thetaBase*180/Math.PI).toFixed(2) + '°)';
+      document.getElementById('pbA').textContent  = (d.pbBaseUm*1000).toFixed(4) + ' → ' + (d.pbTunedUm*1000).toFixed(4) + ' nm';
+      document.getElementById('peak').textContent = (d.peakT*100).toFixed(2) + ' %';
+
+      if (d.thetaT > Math.PI/4 + 1e-6) {
+        msg.className = 'note warn';
+        msg.textContent = 'θ(T) is past 45° (over-coupled): the passband narrows again and peak transmission drops. Reduce the voltage or the base passband.';
+      } else if (d.peakT < 0.9 && p.V === 0) {
+        msg.className = 'note';
+        msg.textContent = 'At V=0 the under-coupled DCs give a narrow band with peak transmission ' + (d.peakT*100).toFixed(1) + '%. Heating widens it toward FSR/2 (peak → 100%) while λ꜀ stays fixed.';
+      } else {
+        msg.className = 'note'; msg.textContent = '';
+      }
+
+      const half = 0.5 * p.span * d.fsrAchUm;
+      const wlA = p.lamC - half, wlB = p.lamC + half;
+      const wls = [], Pc = [], Pc0 = [];
+      for (let i = 0; i < p.N; i++) {
+        const wl = wlA + (wlB - wlA) * i / (p.N - 1);
+        const r  = mziPower(wl, p.W, p.H, p.dl, p.gap, d.Ldc, p.gap, d.Ldc, d.dL, d.dtheta);
+        const r0 = mziPower(wl, p.W, p.H, p.dl, p.gap, d.Ldc, p.gap, d.Ldc, d.dL, 0);
+        wls.push(wl);
+        Pc.push(r ? r.Pcross : NaN);
+        Pc0.push(r0 ? r0.Pcross : NaN);
+      }
+      drawSchematic(d.Ldc, d.dL, d.dT);
+      drawSpectrum(wls, Pc, Pc0, wlA, wlB, p.lamC, d.pbTunedUm);
+    }
+
+    function drawSchematic(Ldc, dL, dT) {
+      const canvas = document.getElementById('schematic');
+      const dpr = window.devicePixelRatio || 1;
+      const cssW = canvas.clientWidth || 880, cssH = 190;
+      canvas.width = cssW*dpr; canvas.height = cssH*dpr;
+      canvas.style.height = cssH + 'px';
+      const ctx = canvas.getContext('2d'); ctx.scale(dpr, dpr);
+      const fg = getComputedStyle(document.documentElement).getPropertyValue('--fg').trim();
+      const muted = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim();
+      const core = getComputedStyle(document.documentElement).getPropertyValue('--core').trim() || '#4263eb';
+      const heat = getComputedStyle(document.documentElement).getPropertyValue('--heat').trim() || '#e8590c';
+
+      const margin = { l: 30, r: 30, t: 28, b: 30 };
+      const Wp = cssW - margin.l - margin.r, Hp = cssH - margin.t - margin.b;
+      const yc = margin.t + Hp/2, dy = 28;
+      const yTop = yc - dy, yBot = yc + dy, wgT = 6;
+      const stubPx = Wp * 0.08, dcSpan = Wp * 0.30;
+      const dcPx = Math.max(20, dcSpan * 0.5);
+      const armPx = Wp - 2*stubPx - 2*dcPx;
+      const xS = margin.l;
+      const xDC1a = xS + stubPx, xDC1b = xDC1a + dcPx;
+      const xDC2a = xDC1b + armPx, xDC2b = xDC2a + dcPx;
+      const xE = xDC2b + stubPx;
+
+      // Heater intensity color by dT
+      const heatFrac = Math.max(0, Math.min(1, dT / 150));
+      const drawDC = (xa) => {
+        // heater bar over the coupler
+        ctx.fillStyle = heat;
+        ctx.globalAlpha = 0.25 + 0.6*heatFrac;
+        ctx.fillRect(xa, yTop - 18, dcPx, 8);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#ffd43b88';
+        ctx.fillRect(xa, yTop - wgT/2 - 2, dcPx, (yBot - yTop) + wgT + 4);
+        ctx.fillStyle = core;
+        ctx.fillRect(xa, yTop - wgT/2, dcPx, wgT);
+        ctx.fillRect(xa, yBot - wgT/2, dcPx, wgT);
+        ctx.strokeStyle = fg; ctx.lineWidth = 1;
+        ctx.strokeRect(xa, yTop - wgT/2 - 2, dcPx, (yBot - yTop) + wgT + 4);
+      };
+      ctx.fillStyle = core;
+      ctx.fillRect(xS, yTop - wgT/2, stubPx, wgT);
+      ctx.fillRect(xS, yBot - wgT/2, stubPx, wgT);
+      drawDC(xDC1a); drawDC(xDC2a);
+      ctx.fillStyle = core;
+      ctx.fillRect(xDC1b, yTop - wgT/2, armPx, wgT);
+      ctx.fillRect(xDC1b, yBot - wgT/2, armPx*0.3, wgT);
+      ctx.fillRect(xDC2a - armPx*0.3, yBot - wgT/2, armPx*0.3, wgT);
+      const bumpH = 12;
+      ctx.beginPath();
+      ctx.moveTo(xDC1b + armPx*0.3, yBot - wgT/2);
+      ctx.lineTo(xDC1b + armPx*0.35, yBot + bumpH - wgT/2);
+      ctx.lineTo(xDC1b + armPx*0.65, yBot + bumpH - wgT/2);
+      ctx.lineTo(xDC1b + armPx*0.7, yBot - wgT/2);
+      ctx.lineTo(xDC1b + armPx*0.7, yBot + wgT/2);
+      ctx.lineTo(xDC1b + armPx*0.65, yBot + bumpH + wgT/2);
+      ctx.lineTo(xDC1b + armPx*0.35, yBot + bumpH + wgT/2);
+      ctx.lineTo(xDC1b + armPx*0.3, yBot + wgT/2);
+      ctx.closePath(); ctx.fill();
+      ctx.fillRect(xDC2b, yTop - wgT/2, stubPx, wgT);
+      ctx.fillRect(xDC2b, yBot - wgT/2, stubPx, wgT);
+
+      ctx.fillStyle = fg; ctx.font = '12px -apple-system, sans-serif';
+      ctx.fillText('input', xS, yTop - 24);
+      ctx.fillText('bar', xE - 22, yTop - 24);
+      ctx.fillText('cross (passband)', xE - 96, yBot + 22);
+      ctx.fillStyle = heat; ctx.font = '11px -apple-system, sans-serif';
+      ctx.fillText('NiCr heater  ΔT = ' + dT.toFixed(1) + ' K', xDC1a, margin.t - 14);
+      ctx.fillStyle = muted;
+      ctx.fillText('+ΔL = ' + dL.toFixed(1) + ' μm (fixes λ꜀)', xDC1b + armPx/2 - 56, yBot + bumpH + 22);
+    }
+
+    function drawSpectrum(wls, Pc, Pc0, wlA, wlB, lamC, pbUm) {
+      const canvas = document.getElementById('chart');
+      const dpr = window.devicePixelRatio || 1;
+      const cssW = canvas.clientWidth || 880, cssH = 380;
+      canvas.width = cssW*dpr; canvas.height = cssH*dpr;
+      canvas.style.height = cssH + 'px';
+      const ctx = canvas.getContext('2d'); ctx.scale(dpr, dpr);
+      const fg = getComputedStyle(document.documentElement).getPropertyValue('--fg').trim();
+      const muted = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim();
+      const border = getComputedStyle(document.documentElement).getPropertyValue('--card-border').trim();
+
+      const margin = { l: 60, r: 20, t: 20, b: 50 };
+      const Wp = cssW - margin.l - margin.r, Hp = cssH - margin.t - margin.b;
+      const xs = (wl) => margin.l + ((wl - wlA) / (wlB - wlA)) * Wp;
+      const ys = (pp) => margin.t + (1 - pp) * Hp;
+
+      if (pbUm > 0) {
+        const xPbA = xs(lamC - pbUm/2), xPbB = xs(lamC + pbUm/2);
+        ctx.fillStyle = 'rgba(224,49,49,0.10)';
+        ctx.fillRect(xPbA, margin.t, Math.max(1, xPbB - xPbA), Hp);
+      }
+
+      ctx.strokeStyle = border; ctx.font = '11px -apple-system, sans-serif';
+      ctx.fillStyle = muted; ctx.setLineDash([3, 3]);
+      [0, 0.25, 0.5, 0.75, 1.0].forEach(pp => {
+        const y = ys(pp);
+        ctx.beginPath(); ctx.moveTo(margin.l, y); ctx.lineTo(margin.l + Wp, y); ctx.stroke();
+        ctx.fillText(pp.toFixed(2), 28, y + 4);
+      });
+      const dWl = wlB - wlA, steps = 5;
+      for (let i = 0; i <= steps; i++) {
+        const wl = wlA + dWl * i / steps, x = xs(wl);
+        ctx.beginPath(); ctx.moveTo(x, margin.t); ctx.lineTo(x, margin.t + Hp); ctx.stroke();
+        ctx.fillText(wl.toFixed(4), x - 16, margin.t + Hp + 14);
+      }
+      ctx.setLineDash([]);
+
+      ctx.strokeStyle = '#e8590c'; ctx.setLineDash([6, 4]);
+      ctx.beginPath(); ctx.moveTo(margin.l, ys(0.5)); ctx.lineTo(margin.l + Wp, ys(0.5)); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.strokeStyle = muted; ctx.setLineDash([2, 3]);
+      ctx.beginPath(); ctx.moveTo(xs(lamC), margin.t); ctx.lineTo(xs(lamC), margin.t + Hp); ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.strokeStyle = fg;
+      ctx.beginPath();
+      ctx.moveTo(margin.l, margin.t); ctx.lineTo(margin.l, margin.t + Hp);
+      ctx.lineTo(margin.l + Wp, margin.t + Hp); ctx.stroke();
+      ctx.fillStyle = fg; ctx.font = '13px -apple-system, sans-serif';
+      ctx.fillText('λ (μm)', margin.l + Wp - 50, margin.t + Hp + 36);
+      ctx.save();
+      ctx.translate(15, margin.t + Hp/2); ctx.rotate(-Math.PI/2);
+      ctx.fillText('Cross power', -40, 0); ctx.restore();
+
+      const drawLine = (arr, color, width, dash) => {
+        ctx.strokeStyle = color; ctx.lineWidth = width;
+        if (dash) ctx.setLineDash(dash); else ctx.setLineDash([]);
+        ctx.beginPath();
+        let started = false;
+        for (let i = 0; i < wls.length; i++) {
+          if (!Number.isFinite(arr[i])) { started = false; continue; }
+          const x = xs(wls[i]), y = ys(arr[i]);
+          if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
+        }
+        ctx.stroke(); ctx.setLineDash([]);
+      };
+      drawLine(Pc0, '#9aa0a6', 1.3, [5, 4]);   // base V=0
+      drawLine(Pc, '#e03131', 2, null);         // tuned
+
+      const lx = margin.l + Wp - 150, ly = margin.t + 14;
+      ctx.fillStyle = '#e03131'; ctx.fillRect(lx, ly - 8, 14, 3);
+      ctx.fillStyle = fg; ctx.fillText('tuned (set V)', lx + 18, ly - 2);
+      ctx.fillStyle = '#9aa0a6'; ctx.fillRect(lx, ly + 8, 14, 3);
+      ctx.fillStyle = fg; ctx.fillText('base (V = 0)', lx + 18, ly + 14);
+    }
+
+    // Keep the V slider and number box in sync.
+    const vRange = document.getElementById('Vrange');
+    const vNum = document.getElementById('V');
+    vRange.addEventListener('input', () => { vNum.value = vRange.value; compute(); });
+    vNum.addEventListener('input', () => {
+      if (Number.isFinite(parseFloat(vNum.value))) vRange.value = vNum.value;
+      compute();
+    });
+    ['W','H','delta','gap','lamC','fsr','pb','span','Npts','rho','wh','th','rth','dndt'].forEach(id => {
+      document.getElementById(id).addEventListener('input', compute);
+    });
+    window.addEventListener('resize', compute);
+    compute();
+  </script>
+</body>
+</html>
