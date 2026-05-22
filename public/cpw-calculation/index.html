@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CPW Modulator">
+<meta name="theme-color" content="#000000">
+<meta name="format-detection" content="telephone=no">
+<link rel="apple-touch-icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect width='180' height='180' rx='40' fill='%23000'/><text x='90' y='112' text-anchor='middle' font-family='system-ui,sans-serif' font-size='80' font-weight='700' fill='%230a84ff'>V%CF%80</text></svg>">
+<title>LiNbO₃ CPW TW Modulator</title>
+<style>
+:root{
+  --bg:#000; --bg2:#1c1c1e; --bg3:#2c2c2e;
+  --fg:#f2f2f7; --fg2:#c7c7cc; --fg3:#8e8e93;
+  --line:#3a3a3c;
+  --blue:#0a84ff; --green:#30d158; --red:#ff453a;
+  --orange:#ff9f0a; --purple:#bf5af2; --brown:#ac8e68;
+  --yellow:#ffd60a; --teal:#5ac8fa; --pink:#ff375f;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);
+  font:14px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",sans-serif;
+  overscroll-behavior-y:contain}
+body{padding:max(16px,env(safe-area-inset-top)) 14px max(16px,env(safe-area-inset-bottom))}
+h1{font-size:18px;font-weight:700;margin:4px 0 18px;text-align:center}
+h1 .sub{display:block;font-size:12px;font-weight:400;color:var(--fg3);margin-top:2px}
+h2{font-size:14px;font-weight:600;margin:0 0 8px;color:var(--fg);letter-spacing:.01em}
+h3{font-size:13px;font-weight:600;margin:0 0 6px;color:var(--fg2)}
+section{background:var(--bg2);border-radius:12px;padding:14px;margin-bottom:12px}
+.row{display:grid;grid-template-columns:1fr 110px 48px;gap:10px;
+     align-items:center;padding:5px 0;min-height:34px}
+.row label{color:var(--fg2);font-size:13px}
+.row .unit{color:var(--fg3);font-size:11px}
+input[type=text],input[type=number]{
+  -webkit-appearance:none;appearance:none;
+  background:var(--bg3);border:1px solid var(--bg3);border-radius:7px;
+  color:var(--fg);font:500 13px/1 -apple-system,sans-serif;
+  padding:7px 9px;text-align:right;width:100%}
+input[type=text]:focus,input[type=number]:focus{
+  outline:none;border-color:var(--blue);background:#000}
+select{
+  -webkit-appearance:none;appearance:none;
+  background:var(--bg3) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8'><path d='M0 0l6 8 6-8z' fill='%238e8e93'/></svg>") right 10px center/10px no-repeat;
+  border:1px solid var(--bg3);border-radius:7px;color:var(--fg);
+  font:500 13px -apple-system,sans-serif;padding:7px 28px 7px 9px;width:100%}
+.check{display:flex;align-items:center;justify-content:space-between;
+       padding:7px 0;color:var(--fg2)}
+.check input{width:46px;height:28px;position:relative;appearance:none;
+             background:var(--bg3);border-radius:14px;transition:.2s;cursor:pointer}
+.check input:checked{background:var(--green)}
+.check input::before{content:"";position:absolute;top:2px;left:2px;
+    width:24px;height:24px;border-radius:12px;background:#fff;transition:.2s}
+.check input:checked::before{transform:translateX(18px)}
+button.run{width:100%;padding:14px;border:none;border-radius:11px;
+  background:var(--blue);color:#fff;font:600 15px -apple-system,sans-serif;
+  margin:14px 0 6px;cursor:pointer;transition:.15s}
+button.run:active{background:#0071e3;transform:scale(.985)}
+button.run .ic{margin-right:6px}
+pre.results{font:11.5px/1.5 ui-monospace,"SF Mono",Menlo,monospace;
+  color:var(--fg2);background:var(--bg3);border-radius:10px;padding:12px;
+  margin:0;overflow-x:auto;white-space:pre;-webkit-user-select:text;user-select:text}
+.plot{background:var(--bg2);border-radius:12px;padding:10px 8px 6px;margin-bottom:12px}
+.plot canvas{display:block;width:100%;height:300px;border-radius:6px}
+.err{color:var(--red);font-size:12px;margin-top:8px;text-align:center}
+.row.wide{grid-template-columns:1fr 1fr;gap:12px}
+.row.wide label{white-space:nowrap}
+@media (min-width:720px){
+  body{max-width:900px;margin:0 auto}
+  .row{grid-template-columns:1.3fr 120px 50px}
+}
+</style>
+</head>
+<body>
+
+<h1>LiNbO₃ CPW TW Modulator
+<span class="sub">RF · Optical · Vπ  —  web build</span></h1>
+
+<section id="inputs"></section>
+<button class="run" id="runBtn"><span class="ic">▶</span>Run Simulation</button>
+<div class="err" id="err"></div>
+
+<section id="resultsSec">
+  <h2>◼ Results</h2>
+  <pre class="results" id="results">—</pre>
+</section>
+
+<div id="plots"></div>
+
+<script>
+// =====================================================================
+// Constants
+// =====================================================================
+const MU0 = 4 * Math.PI * 1e-7;
+const EPS0 = 8.854187817e-12;
+const C0 = 1 / Math.sqrt(MU0 * EPS0);
+
+// =====================================================================
+// Complex number helpers
+// =====================================================================
+const cx = (re, im=0) => ({re, im});
+const cAdd = (a,b) => ({re:a.re+b.re, im:a.im+b.im});
+const cSub = (a,b) => ({re:a.re-b.re, im:a.im-b.im});
+const cMul = (a,b) => ({re:a.re*b.re-a.im*b.im, im:a.re*b.im+a.im*b.re});
+const cDiv = (a,b) => {
+  const d = b.re*b.re + b.im*b.im;
+  return {re:(a.re*b.re+a.im*b.im)/d, im:(a.im*b.re-a.re*b.im)/d};
+};
+const cNeg = a => ({re:-a.re, im:-a.im});
+const cAbs = a => Math.hypot(a.re, a.im);
+const cArg = a => Math.atan2(a.im, a.re);
+const cExp = z => {
+  const e = Math.exp(z.re);
+  return {re:e*Math.cos(z.im), im:e*Math.sin(z.im)};
+};
+const cSqrt = z => {
+  const r = cAbs(z), t = cArg(z), s = Math.sqrt(r);
+  return {re:s*Math.cos(t/2), im:s*Math.sin(t/2)};
+};
+const cCosh = z => ({
+  re: Math.cosh(z.re)*Math.cos(z.im),
+  im: Math.sinh(z.re)*Math.sin(z.im)
+});
+const cSinh = z => ({
+  re: Math.sinh(z.re)*Math.cos(z.im),
+  im: Math.cosh(z.re)*Math.sin(z.im)
+});
+
+// =====================================================================
+// Math utilities
+// =====================================================================
+function linspace(a, b, n){
+  if(n<=1) return [a];
+  const s=(b-a)/(n-1), out=new Array(n);
+  for(let i=0;i<n;i++) out[i]=a+i*s;
+  return out;
+}
+function interp(x, xs, ys){
+  if(xs.length<2) return ys[0]||0;
+  if(x<=xs[0]) return ys[0];
+  if(x>=xs[xs.length-1]) return ys[ys.length-1];
+  let lo=0, hi=xs.length-1;
+  while(hi-lo>1){ const m=(lo+hi)>>1; xs[m]<=x ? lo=m : hi=m; }
+  const t=(x-xs[lo])/(xs[hi]-xs[lo]);
+  return ys[lo]+t*(ys[hi]-ys[lo]);
+}
+function findCrossing(x, y, target){
+  for(let i=0;i<x.length-1;i++){
+    const d1=y[i]-target, d2=y[i+1]-target;
+    if(d1===0) return x[i];
+    if(d1*d2<0){
+      if(y[i+1]===y[i]) return x[i];
+      return x[i]+(target-y[i])*(x[i+1]-x[i])/(y[i+1]-y[i]);
+    }
+  }
+  return null;
+}
+// Complete elliptic integral K(m), m = k^2, via AGM
+function ellipk(m){
+  if(m>=1) return Infinity;
+  if(m<0)  return NaN;
+  let a=1, b=Math.sqrt(1-m);
+  for(let i=0;i<200;i++){
+    const an=0.5*(a+b), bn=Math.sqrt(a*b);
+    if(Math.abs(an-bn)<=1e-15*an){ a=an; break; }
+    a=an; b=bn;
+  }
+  return Math.PI/(2*a);
+}
+// Brent's method
+function brentq(f, xa, xb, xtol=1e-14, maxIt=200){
+  let a=xa, b=xb, fa=f(a), fb=f(b);
+  if(fa*fb>0) return null;
+  if(Math.abs(fa)<Math.abs(fb)){ [a,b]=[b,a]; [fa,fb]=[fb,fa]; }
+  let c=a, fc=fa, d=a, mflag=true;
+  for(let i=0;i<maxIt;i++){
+    if(Math.abs(b-a)<xtol) return b;
+    if(fb===0) return b;
+    let s;
+    if(fa!==fc && fb!==fc){
+      s = a*fb*fc/((fa-fb)*(fa-fc))
+        + b*fa*fc/((fb-fa)*(fb-fc))
+        + c*fa*fb/((fc-fa)*(fc-fb));
+    } else {
+      s = b - fb*(b-a)/(fb-fa);
+    }
+    const bnd = 0.25*(3*a+b);
+    const c1 = (s-bnd)*(s-b)>0;
+    const c2 =  mflag && Math.abs(s-b)>=0.5*Math.abs(b-c);
+    const c3 = !mflag && Math.abs(s-b)>=0.5*Math.abs(c-d);
+    const c4 =  mflag && Math.abs(b-c)<xtol;
+    const c5 = !mflag && Math.abs(c-d)<xtol;
+    if(c1||c2||c3||c4||c5){ s=0.5*(a+b); mflag=true; }
+    else mflag=false;
+    const fs=f(s);
+    d=c; c=b; fc=fb;
+    if(fa*fs<0){ b=s; fb=fs; } else { a=s; fa=fs; }
+    if(Math.abs(fa)<Math.abs(fb)){ [a,b]=[b,a]; [fa,fb]=[fb,fa]; }
+  }
+  return b;
+}
+
+// =====================================================================
+// Physics — direct port of the Python code
+// =====================================================================
+function sellLNno(l){ const L=l*l; return Math.sqrt(4.9048 + 0.11775/(L-0.0475)   - 0.027169*L); }
+function sellLNne(l){ const L=l*l; return Math.sqrt(4.5820 + 0.09921/(L-0.04443)  - 0.021950*L); }
+function sellSiO2(l){
+  const L=l*l;
+  return Math.sqrt(1
+    + 0.6961663*L/(L-0.0684043**2)
+    + 0.4079426*L/(L-0.1162414**2)
+    + 0.8974794*L/(L-9.896161**2));
+}
+function slabNeff(nC, nS, nCl, d, lam){
+  const k0 = 2*Math.PI/lam;
+  const nLo = Math.max(nS, nCl);
+  if(nC<=nLo) return null;
+  const dn2 = nC*nC - nS*nS;
+  if(dn2<=0) return null;
+  const V = k0*d*Math.sqrt(nC*nC - nLo*nLo);
+  if(V<0.01) return null;
+  const a = (nS*nS - nCl*nCl)/dn2;
+  const Vs = k0*d*Math.sqrt(dn2);
+  const eig = b => {
+    if(b<=0||b>=1) return 1e6;
+    const sq = Math.sqrt(1-b);
+    let rhs = Math.atan(Math.sqrt(b/(1-b)));
+    const a2 = (b+a)/(1-b);
+    if(a2<0) return 1e6;
+    rhs += Math.atan(Math.sqrt(a2));
+    return Vs*sq - rhs;
+  };
+  const vLo = eig(1e-12), vHi = eig(1-1e-12);
+  if(vLo*vHi>0) return nS;
+  const b = brentq(eig, 1e-12, 1-1e-12, 1e-14);
+  if(b===null) return nS;
+  return Math.sqrt(nS*nS + b*dn2);
+}
+function cpwQuasiStatic(w, s, eff){
+  const k = w/(w+2*s);
+  const kp = Math.sqrt(1-k*k);
+  const Z0 = (30*Math.PI/Math.sqrt(eff)) * (ellipk(kp*kp)/ellipk(k*k));
+  const vp = C0/Math.sqrt(eff);
+  return {Z0, C: 1/(Z0*vp), L: Z0/vp};
+}
+function effEps(tox, s, eS, eL){
+  const eta = 1 - Math.exp(-2*tox/s);
+  return 0.5*(1 + eta*eS + (1-eta)*eL);
+}
+function Rpm(f, w, t, sig){
+  return 2.2 * Math.sqrt(Math.PI*f*MU0/sig) / (w+2*t);
+}
+function Gpm(f, C, tS, tL, tox, s){
+  const eta = 1 - Math.exp(-2*tox/s);
+  return 2*Math.PI*f*C * (eta*tS + (1-eta)*tL);
+}
+function tlineS(R, L, G, C, f, len, Zref){
+  const w = 2*Math.PI*f;
+  const num = cx(R, w*L);
+  const den = cx(G, w*C);
+  const gamma = cSqrt(cMul(num, den));
+  const Zc    = cSqrt(cDiv(num, den));
+  const gl = cMul(gamma, cx(len,0));
+  const A  = cCosh(gl);
+  const B  = cMul(Zc, cSinh(gl));
+  const Cm = cMul(cDiv(cx(1,0), Zc), cSinh(gl));
+  const D  = cCosh(gl);
+  const Zr = cx(Zref, 0);
+  const den2 = cAdd(cAdd(cAdd(A, cDiv(B, Zr)), cMul(Cm, Zr)), D);
+  const S11  = cDiv(cSub(cSub(cAdd(A, cDiv(B, Zr)), cMul(Cm, Zr)), D), den2);
+  const S21  = cDiv(cx(2,0), den2);
+  return {S11, S21, Zc, gamma};
+}
+function vpiDC(lam, gap, n, r, G, Lel, pp){
+  return lam*gap / ((pp?2:1) * n**3 * r * G * Lel);
+}
+function twEO(f, alpha, nRF, nOpt, Lel){
+  const dBeta = 2*Math.PI*f/C0*(nRF-nOpt);
+  const uL = cMul(cx(alpha, dBeta), cx(Lel, 0));
+  if(cAbs(uL)<1e-12) return 1;
+  return cAbs(cDiv(cSub(cx(1,0), cExp(cNeg(uL))), uL));
+}
+
+// =====================================================================
+// Input schema  (generates the form)
+// =====================================================================
+const SCHEMA = [
+  {title:"◼ CPW Geometry", items:[
+    ["w",         "Signal width (w)",       8,    "μm"],
+    ["s",         "Gap (s)",                16,   "μm"],
+    ["gnd_w",     "Ground width",           50,   "μm"],
+    ["t_au",      "Metal thickness",        20,   "μm"],
+    ["tox",       "SiO₂ thickness",         1.5,  "μm"],
+    ["h_sub",     "Substrate height",       50,   "μm"],
+    ["line_len",  "Electrode length",       20,   "mm"],
+  ]},
+  {title:"◼ Material (RF)", items:[
+    ["sigma_au",  "σ_Au",                   4.1e7,  "S/m"],
+    ["epsr_sio2", "εr SiO₂",                3.9,    ""],
+    ["epsr_ln",   "εr LiNbO₃",              28.0,   ""],
+    ["tan_sio2",  "tan δ SiO₂",             0.0005, ""],
+    ["tan_ln",    "tan δ LiNbO₃",           0.003,  ""],
+  ]},
+  {title:"◼ Optical Waveguide", items:[
+    ["lam",       "Wavelength (λ)",         1.55,  "μm"],
+    ["dn_ti",     "Δn (Ti diffusion)",      0.008, ""],
+    ["d_ti",      "Ti diff. depth",         4.0,   "μm"],
+    ["pol",       "Polarization",           "TM",  "sel:TM,TE"],
+  ]},
+  {title:"◼ Electro-Optic / Vπ", items:[
+    ["r33",       "r₃₃",                    30.8,  "pm/V"],
+    ["r13",       "r₁₃",                    8.6,   "pm/V"],
+    ["gamma",     "Γ (overlap)",            0.5,   ""],
+    ["pp",        "Push-pull MZM",          true,  "bool"],
+  ]},
+  {title:"◼ Frequency / Port", items:[
+    ["f_start",   "Start",                  1,     "GHz"],
+    ["f_stop",    "Stop",                   67,    "GHz"],
+    ["npts",      "Points",                 800,   ""],
+    ["z0_port",   "Z₀ port",                50,    "Ω"],
+  ]},
+];
+
+// =====================================================================
+// Build the form
+// =====================================================================
+const inputsDiv = document.getElementById("inputs");
+SCHEMA.forEach(sec=>{
+  const s = document.createElement("section");
+  s.innerHTML = `<h2>${sec.title}</h2>`;
+  sec.items.forEach(([id,label,def,unit])=>{
+    const row = document.createElement("div");
+    row.className = "row";
+    if(unit==="bool"){
+      row.className = "check";
+      row.innerHTML = `<label for="${id}">${label}</label>
+        <input type="checkbox" id="${id}" ${def?"checked":""}>`;
+    } else if(unit.startsWith("sel:")){
+      const opts = unit.slice(4).split(",");
+      row.innerHTML = `<label for="${id}">${label}</label>
+        <select id="${id}">${opts.map(o=>
+          `<option value="${o}"${o===def?" selected":""}>${o==="TM"?"TM (ne, r₃₃)":"TE (no, r₁₃)"}</option>`
+        ).join("")}</select><span></span>`;
+    } else {
+      row.innerHTML = `<label for="${id}">${label}</label>
+        <input type="text" inputmode="decimal" autocomplete="off" autocorrect="off"
+               autocapitalize="off" spellcheck="false" id="${id}" value="${def}">
+        <span class="unit">${unit}</span>`;
+    }
+    s.appendChild(row);
+  });
+  inputsDiv.appendChild(s);
+});
+
+// Build the 6 plot canvases
+const PLOT_DEFS = [
+  {id:"p1", title:"S11 / S21  (RF electrode)",      xl:"Frequency (GHz)", yl:"Magnitude (dB)"},
+  {id:"p2", title:"RF Attenuation",                  xl:"Frequency (GHz)", yl:"α (dB/cm)"},
+  {id:"p3", title:"Characteristic Impedance",        xl:"Frequency (GHz)", yl:"Z (Ω)"},
+  {id:"p4", title:"Velocity Matching",               xl:"Frequency (GHz)", yl:"Effective index"},
+  {id:"p5", title:"Traveling-Wave EO Response",      xl:"Frequency (GHz)", yl:"EO Response (dB)"},
+  {id:"p6", title:"Half-Wave Voltage  Vπ(f)",        xl:"Frequency (GHz)", yl:"Vπ (V)"},
+];
+const plotsDiv = document.getElementById("plots");
+PLOT_DEFS.forEach(p=>{
+  const d = document.createElement("div");
+  d.className = "plot";
+  d.innerHTML = `<h3>${p.title}</h3><canvas id="${p.id}"></canvas>`;
+  plotsDiv.appendChild(d);
+});
+
+// =====================================================================
+// Plot class — Canvas 2D, no external libraries
+// =====================================================================
+class Plot{
+  constructor(canvas, xlabel, ylabel){
+    this.canvas = canvas;
+    this.ctx = canvas.getContext("2d");
+    this.xlabel = xlabel;
+    this.ylabel = ylabel;
+    this.series = [];
+    this.hlines = [];
+    this.vlines = [];
+    this.ann = [];
+  }
+  clear(){ this.series=[]; this.hlines=[]; this.vlines=[]; this.ann=[]; return this; }
+  line(x, y, opts={}){
+    this.series.push({x, y,
+      color: opts.color || "var(--blue)",
+      width: opts.width || 1.5,
+      label: opts.label, dash: opts.dash});
+    return this;
+  }
+  hline(y, opts={}){ this.hlines.push({y, ...opts}); return this; }
+  vline(x, opts={}){ this.vlines.push({x, ...opts}); return this; }
+  annotate(x,y,text,opts={}){ this.ann.push({x,y,text,...opts}); return this; }
+  setX(min,max){ this.xr=[min,max]; return this; }
+  setY(min,max){ this.yr=[min,max]; return this; }
+
+  _resize(){
+    const dpr = window.devicePixelRatio || 1;
+    const r = this.canvas.getBoundingClientRect();
+    this.W = r.width;
+    this.H = r.height;
+    this.canvas.width  = Math.floor(r.width  * dpr);
+    this.canvas.height = Math.floor(r.height * dpr);
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  _niceNum(v){
+    const a = Math.abs(v);
+    if(v===0) return "0";
+    if(a>=1e4 || a<1e-2) return v.toExponential(1).replace("e+","e").replace("e-0","e-");
+    if(a>=100) return v.toFixed(0);
+    if(a>=10)  return v.toFixed(1);
+    if(a>=1)   return v.toFixed(2);
+    return v.toFixed(3);
+  }
+  _autoRange(){
+    let xmin=Infinity, xmax=-Infinity, ymin=Infinity, ymax=-Infinity;
+    for(const s of this.series){
+      for(const v of s.x){ if(v<xmin)xmin=v; if(v>xmax)xmax=v; }
+      for(const v of s.y){ if(isFinite(v)){ if(v<ymin)ymin=v; if(v>ymax)ymax=v; } }
+    }
+    for(const h of this.hlines){ if(h.y<ymin)ymin=h.y; if(h.y>ymax)ymax=h.y; }
+    if(!isFinite(xmin)){ xmin=0; xmax=1; }
+    if(!isFinite(ymin)){ ymin=0; ymax=1; }
+    if(xmin===xmax){ xmin-=0.5; xmax+=0.5; }
+    if(ymin===ymax){ ymin-=0.5; ymax+=0.5; }
+    const py = (ymax-ymin)*0.08;
+    return [this.xr||[xmin,xmax], this.yr||[ymin-py,ymax+py]];
+  }
+  _color(c){
+    if(!c) return "#0a84ff";
+    if(c.startsWith("var(--")){
+      const name=c.slice(6,-1);
+      return getComputedStyle(document.documentElement).getPropertyValue("--"+name).trim();
+    }
+    return c;
+  }
+  draw(){
+    this._resize();
+    const ctx=this.ctx, W=this.W, H=this.H;
+    ctx.clearRect(0,0,W,H);
+    const [[xmin,xmax],[ymin,ymax]] = this._autoRange();
+    const ml=48, mr=12, mt=10, mb=32;
+    const pw=W-ml-mr, ph=H-mt-mb;
+    const X = v => ml + (v-xmin)/(xmax-xmin)*pw;
+    const Y = v => mt + (1-(v-ymin)/(ymax-ymin))*ph;
+
+    // Frame
+    ctx.strokeStyle="#3a3a3c"; ctx.lineWidth=1;
+    ctx.strokeRect(ml,mt,pw,ph);
+
+    // Grid + tick labels
+    ctx.font="10px -apple-system,system-ui,sans-serif";
+    ctx.fillStyle="#8e8e93";
+    ctx.strokeStyle="#2c2c2e"; ctx.lineWidth=0.5;
+    const nx=5, ny=5;
+    ctx.textAlign="center";
+    for(let i=0;i<=nx;i++){
+      const xv = xmin+(xmax-xmin)*i/nx, px=X(xv);
+      if(i>0 && i<nx){ ctx.beginPath(); ctx.moveTo(px,mt); ctx.lineTo(px,mt+ph); ctx.stroke(); }
+      ctx.fillText(this._niceNum(xv), px, mt+ph+14);
+    }
+    ctx.textAlign="right";
+    for(let i=0;i<=ny;i++){
+      const yv = ymin+(ymax-ymin)*i/ny, py=Y(yv);
+      if(i>0 && i<ny){ ctx.beginPath(); ctx.moveTo(ml,py); ctx.lineTo(ml+pw,py); ctx.stroke(); }
+      ctx.fillText(this._niceNum(yv), ml-4, py+3);
+    }
+
+    // Axis labels
+    ctx.fillStyle="#c7c7cc"; ctx.font="10.5px -apple-system,sans-serif";
+    ctx.textAlign="center";
+    ctx.fillText(this.xlabel, ml+pw/2, H-4);
+    ctx.save();
+    ctx.translate(11, mt+ph/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillText(this.ylabel, 0, 0);
+    ctx.restore();
+
+    // Clip
+    ctx.save(); ctx.beginPath(); ctx.rect(ml,mt,pw,ph); ctx.clip();
+
+    // Reference lines
+    for(const h of this.hlines){
+      if(h.y<ymin||h.y>ymax) continue;
+      ctx.strokeStyle=this._color(h.color||"var(--fg3)");
+      ctx.setLineDash(h.dash||[3,3]); ctx.lineWidth=h.width||0.7;
+      ctx.beginPath(); ctx.moveTo(ml,Y(h.y)); ctx.lineTo(ml+pw,Y(h.y)); ctx.stroke();
+    }
+    for(const v of this.vlines){
+      if(v.x<xmin||v.x>xmax) continue;
+      ctx.strokeStyle=this._color(v.color||"var(--green)");
+      ctx.setLineDash(v.dash||[3,3]); ctx.lineWidth=v.width||0.7;
+      ctx.beginPath(); ctx.moveTo(X(v.x),mt); ctx.lineTo(X(v.x),mt+ph); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    // Data series
+    for(const s of this.series){
+      ctx.strokeStyle=this._color(s.color);
+      ctx.lineWidth=s.width;
+      if(s.dash) ctx.setLineDash(s.dash); else ctx.setLineDash([]);
+      ctx.beginPath();
+      let started=false;
+      for(let i=0;i<s.x.length;i++){
+        const v=s.y[i];
+        if(!isFinite(v)){ started=false; continue; }
+        const px=X(s.x[i]), py=Y(v);
+        if(!started){ ctx.moveTo(px,py); started=true; }
+        else ctx.lineTo(px,py);
+      }
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    // Annotations
+    ctx.font="9.5px -apple-system,sans-serif";
+    for(const a of this.ann){
+      ctx.fillStyle=this._color(a.color||"var(--fg2)");
+      ctx.textAlign=a.align||"left";
+      const ax=X(a.x)+(a.dx||4), ay=Y(a.y)+(a.dy||-5);
+      const lines=a.text.split("\n");
+      for(let i=0;i<lines.length;i++)
+        ctx.fillText(lines[i], ax, ay+i*11);
+    }
+    ctx.restore();
+
+    // Legend (top-right of plot area)
+    const labelled = this.series.filter(s=>s.label);
+    if(labelled.length){
+      ctx.font="10px -apple-system,sans-serif";
+      const padB=4, lh=13;
+      let lw = 0;
+      labelled.forEach(s=>{ lw=Math.max(lw, ctx.measureText(s.label).width); });
+      const bw = lw + 28, bh = labelled.length*lh + padB*2;
+      const bx = ml+pw-bw-4, by = mt+4;
+      ctx.fillStyle="rgba(28,28,30,0.8)";
+      ctx.fillRect(bx,by,bw,bh);
+      ctx.strokeStyle="#3a3a3c"; ctx.lineWidth=0.5;
+      ctx.strokeRect(bx,by,bw,bh);
+      labelled.forEach((s,i)=>{
+        const yy = by+padB+i*lh+5;
+        ctx.strokeStyle=this._color(s.color); ctx.lineWidth=1.5;
+        if(s.dash) ctx.setLineDash(s.dash); else ctx.setLineDash([]);
+        ctx.beginPath(); ctx.moveTo(bx+5,yy); ctx.lineTo(bx+20,yy); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle="#c7c7cc"; ctx.textAlign="left";
+        ctx.fillText(s.label, bx+24, yy+3);
+      });
+    }
+  }
+}
+
+const plots = {};
+PLOT_DEFS.forEach(p=>{
+  plots[p.id] = new Plot(document.getElementById(p.id), p.xl, p.yl);
+});
+
+// =====================================================================
+// Read inputs & run
+// =====================================================================
+function readParams(){
+  const g = id => document.getElementById(id);
+  const f = id => parseFloat(g(id).value);
+  return {
+    w:         f("w")*1e-6,
+    s:         f("s")*1e-6,
+    gnd_w:     f("gnd_w")*1e-6,
+    t_au:      f("t_au")*1e-6,
+    tox:       f("tox")*1e-6,
+    h_sub:     f("h_sub")*1e-6,
+    line_len:  f("line_len")*1e-3,
+    sigma_au:  f("sigma_au"),
+    epsr_sio2: f("epsr_sio2"),
+    epsr_ln:   f("epsr_ln"),
+    tan_sio2:  f("tan_sio2"),
+    tan_ln:    f("tan_ln"),
+    lam_um:    f("lam"),
+    lam:       f("lam")*1e-6,
+    dn_ti:     f("dn_ti"),
+    d_ti:      f("d_ti")*1e-6,
+    pol:       g("pol").value,        // "TM" | "TE"
+    r33:       f("r33")*1e-12,
+    r13:       f("r13")*1e-12,
+    gamma:     f("gamma"),
+    pp:        g("pp").checked,
+    f_start:   f("f_start")*1e9,
+    f_stop:    f("f_stop")*1e9,
+    npts:      Math.max(2, parseInt(g("npts").value,10)||2),
+    z0_port:   f("z0_port"),
+  };
+}
+
+function run(){
+  const errEl = document.getElementById("err");
+  errEl.textContent = "";
+  let p;
+  try { p = readParams(); }
+  catch(e){ errEl.textContent="입력값 오류: "+e.message; return; }
+  if(!isFinite(p.f_start)||!isFinite(p.f_stop)||p.f_stop<=p.f_start){
+    errEl.textContent="주파수 설정이 잘못되었습니다."; return;
+  }
+
+  const f  = linspace(p.f_start, p.f_stop, p.npts);
+  const fg = f.map(v=>v/1e9);
+  const Lel = p.line_len;
+
+  // RF / CPW
+  const epsRf = effEps(p.tox, p.s, p.epsr_sio2, p.epsr_ln);
+  const {Z0:Z0q, C:Cpm, L:Lpm} = cpwQuasiStatic(p.w, p.s, epsRf);
+
+  const s11dB=new Array(f.length), s21dB=new Array(f.length);
+  const alpha=new Array(f.length), zcRe=new Array(f.length), zcIm=new Array(f.length);
+  const nRf=new Array(f.length), gammas=new Array(f.length);
+
+  for(let i=0;i<f.length;i++){
+    const fi=f[i];
+    const R = Rpm(fi, p.w, p.t_au, p.sigma_au);
+    const G = Gpm(fi, Cpm, p.tan_sio2, p.tan_ln, p.tox, p.s);
+    const {S11, S21, Zc, gamma} = tlineS(R, Lpm, G, Cpm, fi, Lel, p.z0_port);
+    s11dB[i] = 20*Math.log10(Math.max(cAbs(S11),1e-15));
+    s21dB[i] = 20*Math.log10(Math.max(cAbs(S21),1e-15));
+    alpha[i] = gamma.re * 8.686 / 100;          // Np/m → dB/cm
+    zcRe[i]  = Zc.re; zcIm[i] = Zc.im;
+    nRf[i]   = C0 * gamma.im / (2*Math.PI*fi);
+    gammas[i]= gamma;
+  }
+  const f3 = findCrossing(f, s21dB, -3);
+  const f6 = findCrossing(f, s21dB, -6);
+  const nRfQs = Math.sqrt(epsRf);
+
+  // Optical
+  const noB   = sellLNno(p.lam_um);
+  const neB   = sellLNne(p.lam_um);
+  const nSiO2 = sellSiO2(p.lam_um);
+  const isTM  = p.pol==="TM";
+  const nBulk = isTM ? neB : noB;
+  const polTag= isTM ? "TM (ne)" : "TE (no)";
+  const nCore = nBulk + p.dn_ti;
+  const nOpt  = slabNeff(nCore, nBulk, nSiO2, p.d_ti, p.lam) ?? nBulk;
+  const dl = 0.001;
+  const sell = isTM ? sellLNne : sellLNno;
+  const dn_dl = (sell(p.lam_um+dl) - sell(p.lam_um-dl)) / (2*dl);
+  const ng = nBulk - p.lam_um*dn_dl;
+
+  // EO / Vπ
+  const rEO = isTM ? p.r33 : p.r13;
+  const nEO = isTM ? neB  : noB;
+  const gap = p.s;
+  const VpiDC = vpiDC(p.lam, gap, nEO, rEO, p.gamma, Lel, p.pp);
+  const VpiLDC = VpiDC * Lel * 100;
+
+  const mEoDB=new Array(f.length), Vpif=new Array(f.length);
+  for(let i=0;i<f.length;i++){
+    const m = twEO(f[i], gammas[i].re, nRf[i], nOpt, Lel);
+    const mc = Math.max(m, 1e-15);
+    mEoDB[i] = 20*Math.log10(mc);
+    Vpif[i]  = VpiDC/mc;
+  }
+  const fEo3 = findCrossing(f, mEoDB, -3);
+  const fEo6 = findCrossing(f, mEoDB, -6);
+
+  // ==================== draw plots ====================
+  const fmtG = v => v===null?null:(v/1e9);
+
+  // 1. S-params
+  plots.p1.clear()
+    .line(fg, s11dB, {color:"var(--blue)",   label:"S11"})
+    .line(fg, s21dB, {color:"var(--orange)", label:"S21"})
+    .hline(-3).hline(-6);
+  if(f3) plots.p1.vline(f3/1e9, {color:"var(--green)"})
+                 .annotate(f3/1e9, -3, `−3 dB\n${(f3/1e9).toFixed(1)} GHz`, {color:"var(--green)"});
+  if(f6) plots.p1.vline(f6/1e9, {color:"var(--red)"})
+                 .annotate(f6/1e9, -6, `−6 dB\n${(f6/1e9).toFixed(1)} GHz`, {color:"var(--red)", dy:12});
+  plots.p1.draw();
+
+  // 2. Attenuation
+  plots.p2.clear().line(fg, alpha, {color:"var(--orange)"}).draw();
+
+  // 3. Impedance
+  plots.p3.clear()
+    .line(fg, zcRe, {color:"var(--blue)",   label:"Re(Zc)"})
+    .line(fg, zcIm, {color:"var(--orange)", label:"Im(Zc)"})
+    .hline(50, {color:"var(--fg3)"}).draw();
+
+  // 4. Velocity matching
+  plots.p4.clear()
+    .line(fg, nRf, {color:"var(--blue)", label:"n_RF (RLGC)", width:1.7})
+    .hline(nRfQs, {color:"var(--blue)", dash:[2,3]})
+    .hline(nOpt,  {color:"var(--red)",  width:1.4})
+    .hline(ng,    {color:"var(--red)",  dash:[3,3]})
+    .annotate(fg[Math.floor(fg.length*0.55)], nRfQs, `n_RF q.s. = ${nRfQs.toFixed(4)}`,
+              {color:"var(--blue)", dy:-4})
+    .annotate(fg[Math.floor(fg.length*0.05)], nOpt,  `n_opt (${polTag}) = ${nOpt.toFixed(4)}`,
+              {color:"var(--red)",  dy:-4})
+    .annotate(fg[Math.floor(fg.length*0.05)], ng,    `n_g = ${ng.toFixed(4)}`,
+              {color:"var(--red)",  dy:12}).draw();
+
+  // 5. EO response
+  plots.p5.clear()
+    .line(fg, mEoDB, {color:"var(--purple)", width:1.7})
+    .hline(-3).hline(-6);
+  if(fEo3) plots.p5.vline(fEo3/1e9, {color:"var(--green)"})
+                   .annotate(fEo3/1e9, -3, `−3 dB (elec)\n${(fEo3/1e9).toFixed(1)} GHz`, {color:"var(--green)"});
+  if(fEo6) plots.p5.vline(fEo6/1e9, {color:"var(--red)"})
+                   .annotate(fEo6/1e9, -6, `−6 dB (opt)\n${(fEo6/1e9).toFixed(1)} GHz`, {color:"var(--red)", dy:14});
+  plots.p5.draw();
+
+  // 6. Vπ(f)
+  plots.p6.clear()
+    .line(fg, Vpif, {color:"var(--brown)", width:1.7, label:"Vπ(f)"})
+    .hline(VpiDC, {color:"var(--brown)", dash:[3,3]})
+    .annotate(fg[Math.floor(fg.length*0.6)], VpiDC,
+              `Vπ_DC = ${VpiDC.toFixed(2)} V`, {color:"var(--brown)", dy:-4}).draw();
+
+  // ==================== Results text ====================
+  const fmt = (v, w=7, p=4) =>
+    (isFinite(v)?v.toFixed(p):"—").padStart(w, " ");
+  const fFmt = v => v===null ? "N/A" : `${(v/1e9).toFixed(2)} GHz`;
+
+  const R = [];
+  R.push("── RF (CPW) ──────────────────────────");
+  R.push(`  ε_eff (RF)     = ${epsRf.toFixed(4)}`);
+  R.push(`  n_RF (q.s.)    = ${nRfQs.toFixed(4)}`);
+  R.push(`  Z0 (q.s.)      = ${Z0q.toFixed(2)} Ω`);
+  R.push(`  L              = ${(Lpm*1e6).toFixed(4)} μH/m`);
+  R.push(`  C              = ${(Cpm*1e12).toFixed(4)} pF/m`);
+  R.push(`  v_ph (RF)      = ${(C0/nRfQs/1e8).toFixed(4)} ×10⁸ m/s`);
+  R.push("");
+  R.push(`  −3 dB freq     = ${fFmt(f3)}`);
+  R.push(`  −6 dB freq     = ${fFmt(f6)}`);
+  R.push(`  α @ 10 GHz     = ${interp(10e9, f, alpha).toFixed(4)} dB/cm`);
+  R.push(`  α @ 40 GHz     = ${interp(40e9, f, alpha).toFixed(4)} dB/cm`);
+  R.push(`  Re(Zc)@10G     = ${interp(10e9, f, zcRe).toFixed(2)} Ω`);
+  R.push("");
+  R.push("── Optical (LiNbO₃) ──────────────────");
+  R.push(`  λ              = ${p.lam_um} μm`);
+  R.push(`  Pol.           = ${polTag}`);
+  R.push(`  no (bulk)      = ${noB.toFixed(5)}`);
+  R.push(`  ne (bulk)      = ${neB.toFixed(5)}`);
+  R.push(`  n_SiO₂         = ${nSiO2.toFixed(5)}`);
+  R.push(`  n_core (+Δn)   = ${nCore.toFixed(5)}`);
+  R.push(`  n_eff (WG)     = ${nOpt.toFixed(5)}`);
+  R.push(`  n_g (group)    = ${ng.toFixed(5)}`);
+  R.push("");
+  R.push("── Velocity Matching ─────────────────");
+  const dnMid = interp(0.5*(p.f_start+p.f_stop), f, nRf) - nOpt;
+  R.push(`  Δn (mid-freq)  = ${dnMid>=0?"+":""}${dnMid.toFixed(5)}`);
+  const dnQs = nRfQs - nOpt;
+  R.push(`  n_RF − n_opt   = ${dnQs>=0?"+":""}${dnQs.toFixed(5)}  (q.s.)`);
+  R.push("");
+  R.push("── Vπ / EO ───────────────────────────");
+  R.push(`  EO coeff       = ${isTM?"r₃₃":"r₁₃"} = ${(rEO*1e12).toFixed(1)} pm/V`);
+  R.push(`  n (EO)         = ${nEO.toFixed(5)}`);
+  R.push(`  Γ (overlap)    = ${p.gamma.toFixed(3)}`);
+  R.push(`  MZM type       = ${p.pp?"Push-pull":"Single-arm"}`);
+  R.push(`  Electrode gap  = ${(gap*1e6).toFixed(1)} μm`);
+  R.push(`  Electrode L    = ${(Lel*1e3).toFixed(1)} mm`);
+  R.push("");
+  R.push(`  Vπ (DC)        = ${VpiDC.toFixed(3)} V`);
+  R.push(`  Vπ·L (DC)      = ${VpiLDC.toFixed(3)} V·cm`);
+  R.push("");
+  R.push(`  Vπ @ 10 GHz    = ${interp(10e9, f, Vpif).toFixed(3)} V`);
+  R.push(`  Vπ @ 40 GHz    = ${interp(40e9, f, Vpif).toFixed(3)} V`);
+  R.push("");
+  R.push(`  EO BW (−3dB el) = ${fFmt(fEo3)}`);
+  R.push(`  EO BW (−6dB op) = ${fFmt(fEo6)}`);
+
+  document.getElementById("results").textContent = R.join("\n");
+}
+
+// =====================================================================
+// Wire events
+// =====================================================================
+document.getElementById("runBtn").addEventListener("click", () => {
+  document.activeElement && document.activeElement.blur();
+  run();
+});
+window.addEventListener("resize", () => {
+  if(plots.p1.series.length) Object.values(plots).forEach(p=>p.draw());
+});
+// Kick off an initial run
+setTimeout(run, 60);
+</script>
+</body>
+</html>
