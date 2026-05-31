@@ -2264,11 +2264,12 @@ class WaveguideApp:
 
         _, self.seg_tree = _make_scrolled_tree(
             sbox,
-            columns=("sid","kind","start","end","w","layer","params"),
+            columns=("sid","kind","start","end","len","w","layer","params"),
             col_configs=[("sid","#",30),("kind","kind",55),
                          ("start","start→",50),("end","end",45),
+                         ("len","len [µm]",60),
                          ("w","w [µm]",50),
-                         ("layer","layer",55),("params","params",130)],
+                         ("layer","layer",55),("params","params",120)],
             height=14,
         )
         self.seg_tree.configure(selectmode="extended")   # multi-select
@@ -2289,6 +2290,10 @@ class WaveguideApp:
                    command=self.select_all_segments).pack(side=tk.LEFT, padx=2)
         ttk.Button(bf, text="Delete all",
                    command=self.delete_all_segments).pack(side=tk.LEFT, padx=2)
+        ttk.Separator(bf, orient=tk.VERTICAL).pack(side=tk.LEFT,
+                                                   fill=tk.Y, padx=6)
+        ttk.Button(bf, text="📏 Measure",
+                   command=self.measure_segments).pack(side=tk.LEFT, padx=2)
         ttk.Separator(bf, orient=tk.VERTICAL).pack(side=tk.LEFT,
                                                    fill=tk.Y, padx=6)
         ttk.Button(bf, text="⚙  Group selected…",
@@ -2478,6 +2483,7 @@ class WaveguideApp:
 
     def _refresh_segment_list(self):
         self.seg_tree.delete(*self.seg_tree.get_children())
+        prev_map = self.project._prev_by_start()
         for s in self.project.segments:
             ly = self.project.layers[s.layer_idx].name \
                  if 0 <= s.layer_idx < len(self.project.layers) else "?"
@@ -2487,12 +2493,122 @@ class WaveguideApp:
                 w_str = f"{float(w_val):g}" if float(w_val) > 0 else "(port)"
             except Exception:
                 w_str = "(port)"
+            L = self._segment_length(s, prev_map)
+            len_str = f"{L:.2f}" if L is not None else "—"
             pstr = ", ".join(f"{k}={v}" for k, v in s.params.items()
                              if k != "width")
             self.seg_tree.insert(
                 "", tk.END, iid=str(s.sid),
                 values=(s.sid, s.kind, s.start_pid, s.end_pid,
-                        w_str, ly, pstr))
+                        len_str, w_str, ly, pstr))
+
+    # ------------------------------------------------------------------
+    #  (rev27) Geometry helpers — segment length & spacing measurement
+    # ------------------------------------------------------------------
+    def _segment_geom(self, seg, prev_map=None):
+        """Return (path_xy, widths, extra_polys) for a segment, or None."""
+        start = self.project.get_port(seg.start_pid)
+        if start is None:
+            return None
+        if prev_map is None:
+            prev_map = self.project._prev_by_start()
+        try:
+            _res = segment_geometry(
+                seg.kind, start,
+                self.project.effective_params(seg, prev_map),
+                globals_dict=self.project.globals)
+        except Exception:
+            return None
+        path = _res[0]
+        widths = _res[1]
+        extra = _res[3] if len(_res) > 3 else None
+        return path, widths, extra
+
+    def _segment_length(self, seg, prev_map=None):
+        """Centreline arc length [µm] (polygon-perimeter/2 for spirals)."""
+        g = self._segment_geom(seg, prev_map)
+        if g is None:
+            return None
+        path, _w, extra = g
+        if extra is not None:           # gdsfactory spiral → use polygons
+            try:
+                return _polys_length(extra)
+            except Exception:
+                return None
+        if path is None or len(path) < 2:
+            return 0.0
+        return float(np.sum(np.hypot(np.diff(path[:, 0]),
+                                     np.diff(path[:, 1]))))
+
+    def measure_segments(self):
+        sel = self.seg_tree.selection()
+        if not sel:
+            messagebox.showinfo(
+                "Measure",
+                "측정할 세그먼트를 표에서 선택하세요.\n"
+                "  • 1개 선택 → 길이\n"
+                "  • 2개 선택 → 각 길이 + 둘 사이 간격(gap)\n"
+                "  • 3개 이상 → 각 길이 + 합계")
+            return
+        prev_map = self.project._prev_by_start()
+        segs = [s for s in self.project.segments if str(s.sid) in set(sel)]
+        if not segs:
+            return
+
+        lines = []
+        total = 0.0
+        for s in segs:
+            L = self._segment_length(s, prev_map)
+            if L is None:
+                lines.append(f"S{s.sid} ({s.kind}): 길이 계산 불가")
+            else:
+                total += L
+                lines.append(f"S{s.sid} ({s.kind}): {L:.3f} µm")
+        lines.append(f"\n합계 길이: {total:.3f} µm")
+
+        # exactly two → also report the gap between them
+        if len(segs) == 2:
+            gap = self._segment_gap(segs[0], segs[1], prev_map)
+            if gap is None:
+                lines.append("\n간격: 계산 불가")
+            else:
+                c_gap, e_gap, wa, wb = gap
+                lines.append(
+                    f"\n— S{segs[0].sid} ↔ S{segs[1].sid} 간격 —\n"
+                    f"중심선 간 최소거리: {c_gap:.3f} µm\n"
+                    f"가장자리 간 최소거리(gap): {e_gap:.3f} µm\n"
+                    f"  (폭 wA≈{wa:.3g}, wB≈{wb:.3g} 적용)")
+                if e_gap < 0:
+                    lines.append("  ⚠ 두 도파로가 겹칩니다 (gap < 0).")
+
+        messagebox.showinfo("Measure", "\n".join(lines))
+
+    def _segment_gap(self, sa, sb, prev_map=None):
+        """Min centre/edge distance between two segment centrelines.
+
+        Returns (center_gap, edge_gap, w_a_at_min, w_b_at_min) or None.
+        Point-to-point over the sampled centrelines — adequate for a
+        layout readout.
+        """
+        ga = self._segment_geom(sa, prev_map)
+        gb = self._segment_geom(sb, prev_map)
+        if ga is None or gb is None:
+            return None
+        pa, wa, _ = ga
+        pb, wb, _ = gb
+        if pa is None or pb is None or len(pa) == 0 or len(pb) == 0:
+            return None
+        A = np.asarray(pa, dtype=float)
+        B = np.asarray(pb, dtype=float)
+        d2 = ((A[:, None, :] - B[None, :, :]) ** 2).sum(axis=-1)
+        ia, ib = np.unravel_index(int(np.argmin(d2)), d2.shape)
+        c_gap = float(np.sqrt(d2[ia, ib]))
+        try:
+            wa_i = float(wa[ia]); wb_i = float(wb[ib])
+        except Exception:
+            wa_i = wb_i = 0.0
+        e_gap = c_gap - wa_i / 2.0 - wb_i / 2.0
+        return c_gap, e_gap, wa_i, wb_i
 
     # ------------------------------------------------------------------
     #  Canvas redraw
