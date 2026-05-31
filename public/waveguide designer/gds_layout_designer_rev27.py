@@ -1692,6 +1692,12 @@ class WaveguideApp:
         # track a press position so a tiny drag doesn't count as a pick
         self._click_press: Optional[dict] = None
 
+        # (rev27) Undo history for the Segment Sequence editor. Each entry is
+        # a full project snapshot (Project.to_dict) captured *before* a
+        # mutating action; "Undo" pops the most recent and restores it.
+        self._undo_stack: List[Dict] = []
+        self._UNDO_LIMIT = 50
+
         # (rev26) Canvas click behaviour mode.
         #   False (default): single-click selects, double-click edits
         #   True           : single-click selects AND opens editor
@@ -2272,15 +2278,30 @@ class WaveguideApp:
                            lambda e: self._on_seg_tree_select())
 
         bf = ttk.Frame(sbox); bf.pack(fill=tk.X, padx=4, pady=(0, 4))
+        ttk.Button(bf, text="↶ Undo", command=self.undo).pack(side=tk.LEFT, padx=(1, 6))
         ttk.Button(bf, text="↑",      command=lambda: self.move_segment(-1)).pack(side=tk.LEFT, padx=1)
         ttk.Button(bf, text="↓",      command=lambda: self.move_segment(+1)).pack(side=tk.LEFT, padx=1)
         ttk.Button(bf, text="Edit",   command=self.edit_segment).pack(side=tk.LEFT, padx=4)
         ttk.Button(bf, text="Delete", command=self.delete_segment).pack(side=tk.LEFT, padx=2)
         ttk.Separator(bf, orient=tk.VERTICAL).pack(side=tk.LEFT,
                                                    fill=tk.Y, padx=6)
+        ttk.Button(bf, text="Select all",
+                   command=self.select_all_segments).pack(side=tk.LEFT, padx=2)
+        ttk.Button(bf, text="Delete all",
+                   command=self.delete_all_segments).pack(side=tk.LEFT, padx=2)
+        ttk.Separator(bf, orient=tk.VERTICAL).pack(side=tk.LEFT,
+                                                   fill=tk.Y, padx=6)
         ttk.Button(bf, text="⚙  Group selected…",
                    command=self.group_selected_segments
                    ).pack(side=tk.LEFT, padx=2)
+
+        # Keyboard: Ctrl/Cmd+Z undo, Ctrl/Cmd+A select-all (when tree focused)
+        self.seg_tree.bind("<Control-z>", lambda e: (self.undo(), "break")[1])
+        self.seg_tree.bind("<Command-z>", lambda e: (self.undo(), "break")[1])
+        self.seg_tree.bind("<Control-a>",
+                           lambda e: (self.select_all_segments(), "break")[1])
+        self.seg_tree.bind("<Command-a>",
+                           lambda e: (self.select_all_segments(), "break")[1])
 
         # --- add segment form ---
         fbox = ttk.LabelFrame(self.right, text="Add Segment")
@@ -3516,11 +3537,13 @@ class WaveguideApp:
                 return
             params[key] = _store_param(txt, v)
 
+        self._push_undo()
         try:
             seg = self.project.add_segment(
                 kind, start_pid, self._selected_layer_idx(), params,
                 end_pid=end_pid)
         except RuntimeError as e:
+            self._undo_stack.pop()      # add failed → discard the snapshot
             messagebox.showerror("Add segment", str(e))
             return
         self.refresh_all()
@@ -3539,6 +3562,7 @@ class WaveguideApp:
                             self.project.layers, seg,
                             globals_dict=self.project.globals)
         if dlg.result is None: return
+        self._push_undo()
         seg.kind = dlg.result["kind"]
         seg.start_pid = dlg.result["start_pid"]
         seg.layer_idx = dlg.result["layer_idx"]
@@ -3549,17 +3573,68 @@ class WaveguideApp:
     def delete_segment(self):
         sel = self.seg_tree.selection()
         if not sel: return
-        sid = int(sel[0])
-        self.project.delete_segment(sid)
-        if self.selected_sid == sid:
-            self.selected_sid = None
+        self._push_undo()
+        # delete every selected row (selectmode is "extended")
+        for iid in sel:
+            sid = int(iid)
+            self.project.delete_segment(sid)
+            if self.selected_sid == sid:
+                self.selected_sid = None
         self.refresh_all()
 
     def move_segment(self, delta: int):
         sel = self.seg_tree.selection()
         if not sel: return
+        self._push_undo()
         sid = int(sel[0])
         self.project.move_segment(sid, delta)
+        self.refresh_all()
+
+    # ------------------------------------------------------------------
+    #  (rev27) Undo / Select-all / Delete-all  for the Segment Sequence
+    # ------------------------------------------------------------------
+    def _push_undo(self):
+        """Snapshot the current project before a mutating action."""
+        try:
+            self._undo_stack.append(self.project.to_dict())
+        except Exception:
+            return
+        if len(self._undo_stack) > self._UNDO_LIMIT:
+            self._undo_stack.pop(0)
+
+    def undo(self):
+        """Restore the most recent snapshot pushed by _push_undo()."""
+        if not self._undo_stack:
+            messagebox.showinfo("Undo", "되돌릴 작업이 없습니다.")
+            return
+        snap = self._undo_stack.pop()
+        groups = self.project._groups   # preserve script-defined groups
+        self.project = Project.from_dict(snap)
+        self.project._groups = groups
+        self.selected_sid = None
+        self.refresh_all()
+        self.fit_view()
+
+    def select_all_segments(self):
+        items = self.seg_tree.get_children("")
+        if not items: return
+        self.seg_tree.selection_set(items)
+        self.seg_tree.focus(items[0])
+
+    def delete_all_segments(self):
+        if not self.project.segments:
+            messagebox.showinfo("Delete all", "삭제할 세그먼트가 없습니다.")
+            return
+        if not messagebox.askyesno(
+                "Delete all",
+                f"세그먼트 {len(self.project.segments)}개를 모두 삭제할까요?\n"
+                f"(Undo 로 복원할 수 있습니다.)"):
+            return
+        self._push_undo()
+        # delete by sid; copy the list since delete_segment mutates it
+        for sid in [s.sid for s in list(self.project.segments)]:
+            self.project.delete_segment(sid)
+        self.selected_sid = None
         self.refresh_all()
 
     # ==================================================================
