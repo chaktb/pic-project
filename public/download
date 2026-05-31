@@ -1,0 +1,167 @@
+"""
+Simulation Display Window
+Ported from frm_Simulation.frm (VB 5.0/6.0) to Python/Tkinter
+
+Shows spectral response (power vs wavelength) in real-time.
+"""
+
+import tkinter as tk
+from tkinter import ttk
+import globals as g
+
+
+_PORT_COLORS = [
+    "#ff5555", "#55ff55", "#5555ff", "#ffff55",
+    "#55ffff", "#ff55ff", "#ff9955", "#55ff99",
+    "#9955ff", "#ff5599", "#99ff55", "#5599ff",
+    "#ffcc55", "#55ffcc", "#cc55ff",
+]
+
+
+class FrmSimulation:
+    """Spectral response display window."""
+
+    def __init__(self, master):
+        self.master  = master
+        self.window  = None
+        self.canvas  = None
+
+        # Plot bounds
+        self._wl_start = 1540.0
+        self._wl_end   = 1560.0
+        self._pwr_min  = -100.0
+        self._pwr_max  = 0.0
+
+        self._margin_left   = 60
+        self._margin_right  = 20
+        self._margin_top    = 20
+        self._margin_bottom = 40
+
+    def show(self):
+        if self.window is None or not self.window.winfo_exists():
+            self._build()
+        self.window.deiconify()
+        self.window.lift()
+
+    def _build(self):
+        self.window = tk.Toplevel(self.master)
+        self.window.title("Simulation – Spectral Response")
+        self.window.resizable(True, True)
+        self.window.protocol("WM_DELETE_WINDOW", self._on_close)
+
+        # Wavelength display
+        top = ttk.Frame(self.window)
+        top.pack(fill=tk.X, padx=6, pady=4)
+        ttk.Label(top, text="Current Wavelength:").pack(side=tk.LEFT)
+        self.var_wavel = tk.StringVar()
+        ttk.Entry(top, textvariable=self.var_wavel, width=12, state="readonly")\
+            .pack(side=tk.LEFT, padx=4)
+        ttk.Label(top, text="nm").pack(side=tk.LEFT)
+
+        # Canvas
+        self.canvas = tk.Canvas(self.window, bg="#0d1117",
+                                width=800, height=500)
+        self.canvas.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+
+    def prepare(self, wl_start_nm, wl_end_nm):
+        """Prepare axes before simulation starts."""
+        self._wl_start = wl_start_nm
+        self._wl_end   = wl_end_nm
+        self._pwr_min  = -100.0
+        self._pwr_max  = 0.0
+
+        if self.canvas:
+            self.canvas.delete("all")
+            self._draw_grid()
+
+    def _draw_grid(self):
+        """Draw background grid and axes."""
+        if not self.canvas:
+            return
+
+        cw = self.canvas.winfo_width()  or 800
+        ch = self.canvas.winfo_height() or 500
+        ml, mr, mt, mb = (self._margin_left, self._margin_right,
+                          self._margin_top, self._margin_bottom)
+        pw = cw - ml - mr
+        ph = ch - mt - mb
+
+        # Wavelength grid lines at each channel wavelength
+        wl_step = g.wl_d * 1e9 if g.wl_d else 1.0
+        wl = self._wl_start
+        while wl <= self._wl_end:
+            x = ml + pw * (wl - self._wl_start) / (self._wl_end - self._wl_start)
+            self.canvas.create_line(x, mt, x, mt + ph,
+                                    fill="#004444", tags="grid")
+            wl += wl_step
+
+        # Power grid lines every 10 dB
+        for pwr in range(0, -110, -10):
+            y = mt + ph * (self._pwr_max - pwr) / (self._pwr_max - self._pwr_min)
+            self.canvas.create_line(ml, y, ml + pw, y,
+                                    fill="#004444", tags="grid")
+            self.canvas.create_text(ml - 4, y, text=str(pwr),
+                                    fill="#888888", anchor="e", font=("Arial", 8))
+
+        # Axis labels
+        self.canvas.create_text(ml, mt + ph + 20,
+                                text=f"{self._wl_start:.1f} nm",
+                                fill="#aaaaaa", anchor="w", font=("Arial", 8))
+        self.canvas.create_text(ml + pw, mt + ph + 20,
+                                text=f"{self._wl_end:.1f} nm",
+                                fill="#aaaaaa", anchor="e", font=("Arial", 8))
+        self.canvas.create_text(ml // 2, mt + ph // 2,
+                                text="dB", fill="#aaaaaa",
+                                angle=90, font=("Arial", 9))
+
+        # Border
+        self.canvas.create_rectangle(ml, mt, ml + pw, mt + ph,
+                                     outline="#336633", tags="border")
+
+    def _wl_to_x(self, wl_nm):
+        cw = self.canvas.winfo_width()  or 800
+        ml = self._margin_left
+        mr = self._margin_right
+        pw = cw - ml - mr
+        return ml + pw * (wl_nm - self._wl_start) / max(self._wl_end - self._wl_start, 1e-6)
+
+    def _pwr_to_y(self, pwr_db):
+        ch = self.canvas.winfo_height() or 500
+        mt = self._margin_top
+        mb = self._margin_bottom
+        ph = ch - mt - mb
+        return mt + ph * (self._pwr_max - pwr_db) / (self._pwr_max - self._pwr_min)
+
+    def draw_results(self, results):
+        """Draw simulation results after simulation completes."""
+        if not self.canvas:
+            return
+
+        self.canvas.delete("all")
+        self._draw_grid()
+
+        for port_idx, (port, data) in enumerate(results.items()):
+            color = _PORT_COLORS[port_idx % len(_PORT_COLORS)]
+            pts = []
+            for wl_nm, pwr_db in data:
+                x = self._wl_to_x(wl_nm)
+                y = self._pwr_to_y(max(pwr_db, self._pwr_min))
+                pts.extend([x, y])
+            if len(pts) >= 4:
+                self.canvas.create_line(*pts, fill=color, width=1.5, smooth=True)
+
+        # Legend
+        for port_idx, port in enumerate(results.keys()):
+            color = _PORT_COLORS[port_idx % len(_PORT_COLORS)]
+            self.canvas.create_text(
+                self._margin_left + 10,
+                self._margin_top  + 12 + port_idx * 14,
+                text=f"Port {port}", fill=color,
+                anchor="w", font=("Arial", 8))
+
+    def update_wavelength(self, wl_nm):
+        self.var_wavel.set(f"{wl_nm:.3f}")
+
+    def _on_close(self):
+        if self.window:
+            self.window.withdraw()

@@ -1,0 +1,141 @@
+"""
+Coupling Coefficient Visualization Form
+Ported from frm_CplCoeff.frm (VB 5.0/6.0) to Python/Tkinter
+"""
+
+import tkinter as tk
+from tkinter import ttk
+import math
+
+
+class FrmCplCoeff:
+    """Coupling coefficient amplitude vs array waveguide index plot."""
+
+    def __init__(self, master):
+        self.master  = master
+        self.window  = None
+        self.canvas  = None
+
+    def show(self):
+        if self.window is None or not self.window.winfo_exists():
+            self._build()
+        self.window.deiconify()
+        self.window.lift()
+
+    def _build(self):
+        self.window = tk.Toplevel(self.master)
+        self.window.title("Coupling Coefficients")
+        self.window.resizable(True, True)
+        self.window.protocol("WM_DELETE_WINDOW", self._on_close)
+
+        # Cursor position
+        self.var_pos = tk.StringVar()
+        ttk.Label(self.window, textvariable=self.var_pos)\
+            .pack(fill=tk.X, padx=6, pady=2)
+
+        self.canvas = tk.Canvas(self.window, bg="#0d1117",
+                                width=500, height=320)
+        self.canvas.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+        self.canvas.bind("<Motion>", self._on_motion)
+
+    def plot_coeffs(self, cpl_coeff, na, gauss_width=0.35):
+        """Draw coupling coefficient bar chart."""
+        if not self.canvas or na == 0:
+            return
+
+        self.canvas.delete("all")
+
+        import globals as g
+
+        # Calculate Gaussian reference
+        gauss = []
+        pwr_sum = 0.0
+        for i in range(1, na + 1):
+            v = abs(i - 0.5 * (na + 1)) / (gauss_width * (na + 1))
+            c = math.exp(-(v ** 2))
+            gauss.append(c)
+            pwr_sum += c ** 2
+        pwr_sum = math.sqrt(pwr_sum)
+        if pwr_sum > 0:
+            gauss = [c / pwr_sum for c in gauss]
+
+        max_c = max((abs(cpl_coeff[i]) for i in range(1, na + 1)),
+                    default=1.0)
+        max_c = max(max_c, max(gauss, default=1e-9), 1e-9) * 1.2
+
+        cw = self.canvas.winfo_width()  or 500
+        ch = self.canvas.winfo_height() or 320
+        ml, mr, mt, mb = 40, 10, 10, 30
+
+        def ix(i_aw):
+            return ml + (cw - ml - mr) * (i_aw - 0.5) / na
+
+        def iy(c):
+            return mt + (ch - mt - mb) * (1.0 - c / max_c)
+
+        # Grid
+        for k in range(5):
+            y = mt + (ch - mt - mb) * k / 4
+            self.canvas.create_line(ml, y, cw - mr, y,
+                                    fill="#223322", dash=(2, 4))
+
+        # Gaussian reference (green circles)
+        for i, g_val in enumerate(gauss):
+            x = ix(i + 1)
+            y = iy(g_val)
+            r = max(2, (cw - ml - mr) / na / 5)
+            self.canvas.create_oval(x - r, y - r, x + r, y + r,
+                                    outline="#00bb00", fill="")
+
+        # Current coefficients (red dots)
+        for i in range(1, na + 1):
+            c = abs(cpl_coeff[i]) if i < len(cpl_coeff) else 0.0
+            x = ix(i)
+            y = iy(c)
+            r = max(2, (cw - ml - mr) / na / 5)
+            self.canvas.create_oval(x - r, y - r, x + r, y + r,
+                                    outline="#cc0000", fill="#cc0000")
+
+        # Axes
+        self.canvas.create_line(ml, mt, ml, ch - mb, fill="#666666")
+        self.canvas.create_line(ml, ch - mb, cw - mr, ch - mb,
+                                fill="#666666")
+
+        # X-axis labels
+        self.canvas.create_text(ml, ch - mb + 12,
+                                text="1", fill="#888888",
+                                font=("Arial", 7), anchor="n")
+        self.canvas.create_text(cw - mr, ch - mb + 12,
+                                text=str(na), fill="#888888",
+                                font=("Arial", 7), anchor="n")
+
+        self._na    = na
+        self._max_c = max_c
+        self._ml    = ml
+        self._mt    = mt
+        self._cw    = cw
+        self._ch    = ch
+        self._mb    = mb
+        self._mr    = mr
+
+    def _on_motion(self, event):
+        try:
+            na   = self._na
+            ml   = self._ml
+            mr   = self._mr
+            mt   = self._mt
+            mb   = self._mb
+            cw   = self._cw
+            ch   = self._ch
+            mc   = self._max_c
+            x = event.x
+            y = event.y
+            i_aw = int(round((x - ml) / (cw - ml - mr) * na + 0.5))
+            c    = mc * (1.0 - (y - mt) / (ch - mt - mb))
+            self.var_pos.set(f"Index: {i_aw}   Amplitude: {c:.4f}")
+        except (AttributeError, ZeroDivisionError):
+            pass
+
+    def _on_close(self):
+        if self.window:
+            self.window.withdraw()
