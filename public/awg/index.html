@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Arrayed Waveguide Grating (AWG) — N×N Wavelength Demultiplexer</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #ffffff;
+      --fg: #1a1a1a;
+      --muted: #666;
+      --card-bg: #f7f7f9;
+      --card-border: #e1e1e6;
+      --accent: #3b5bdb;
+      --input-bg: #ffffff;
+      --core: #4263eb;
+      --slab: #adb5bd;
+      --hot:  #e8590c;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0e0e10;
+        --fg: #e8e8ea;
+        --muted: #9a9aa3;
+        --card-bg: #1a1a1e;
+        --card-border: #2a2a30;
+        --accent: #748ffc;
+        --input-bg: #14141a;
+        --slab: #495057;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0 auto; max-width: 920px; padding: 1.5rem;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg); color: var(--fg); line-height: 1.6;
+    }
+    .back { display: inline-block; margin-bottom: 1rem; color: var(--muted); text-decoration: none; }
+    .back:hover { text-decoration: underline; color: var(--accent); }
+    h1 { margin-bottom: 0.25rem; letter-spacing: -0.02em; }
+    .subtitle { color: var(--muted); margin-top: 0; }
+    .panel {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0;
+    }
+    .panel h3 { margin: 0 0 1rem; font-size: 0.95rem; color: var(--muted); font-weight: 600; }
+    .form-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem;
+    }
+    label { display: flex; flex-direction: column; font-size: 0.9rem; color: var(--muted); }
+    label span.unit { font-size: 0.8rem; }
+    input[type=number], select {
+      margin-top: 0.35rem; padding: 0.55rem 0.75rem; font-size: 1rem;
+      background: var(--input-bg); color: var(--fg); border: 1px solid var(--card-border);
+      border-radius: 8px; font-variant-numeric: tabular-nums;
+    }
+    input[type=number]:focus, select:focus { outline: none; border-color: var(--accent); }
+    .results {
+      display: grid; grid-template-columns: 1fr auto;
+      gap: 0.4rem 1.5rem; font-variant-numeric: tabular-nums;
+    }
+    .results .key { color: var(--muted); }
+    .results .val { font-weight: 600; }
+    .results .val.primary { color: var(--accent); font-size: 1.1rem; }
+    .note { color: var(--muted); font-size: 0.85rem; margin: 0.75rem 0 0; }
+    .warn { color: #e8590c; }
+    canvas { width: 100%; display: block; background: var(--input-bg); border-radius: 8px; }
+    .links a { display: inline-block; margin-right: 1rem; color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+    .links a:hover { text-decoration: underline; }
+    .formula {
+      background: var(--card-bg); border-left: 3px solid var(--accent);
+      padding: 0.75rem 1rem; margin: 0.75rem 0; font-size: 0.9rem;
+    }
+    footer { margin-top: 2rem; color: var(--muted); font-size: 0.85rem; text-align: center; }
+  </style>
+</head>
+<body>
+  <a class="back" href="../">← Home</a>
+  <h1>Arrayed Waveguide Grating (AWG)</h1>
+  <p class="subtitle">N×N wavelength (de)multiplexer — two slab star couplers connected by an array of waveguides with a constant path increment ΔL. The phase order m and ΔL fix the dispersion; the focal length f<sub>l</sub> sets the channel spacing on the output star.</p>
+
+  <div class="panel">
+    <h3>Waveguide (EIM TE, silica core, lower-Δ cladding)</h3>
+    <div class="form-grid">
+      <label>WG width W <span class="unit">(μm)</span>
+        <input type="number" id="W" value="6.0" step="0.1" min="0.05" /></label>
+      <label>WG height H <span class="unit">(μm)</span>
+        <input type="number" id="H" value="6.0" step="0.1" min="0.05" /></label>
+      <label>Δ index contrast <span class="unit">(%)</span>
+        <input type="number" id="delta" value="0.75" step="0.05" min="0.001" max="50" /></label>
+    </div>
+
+    <h3 style="margin-top:1.25rem;">AWG channel spec</h3>
+    <div class="form-grid">
+      <label>Center λ꜀ <span class="unit">(μm)</span>
+        <input type="number" id="lamC" value="1.55" step="0.01" min="0.21" max="6.7" /></label>
+      <label>Channel spacing Δλ_ch <span class="unit">(nm)</span>
+        <input type="number" id="dlch" value="0.8" step="0.1" min="0.01" /></label>
+      <label>Number of channels N_ch
+        <input type="number" id="nch" value="4" step="1" min="2" max="32" /></label>
+      <label>Phase order m <span class="unit">(0 = auto)</span>
+        <input type="number" id="mphase" value="0" step="1" min="0" /></label>
+    </div>
+
+    <h3 style="margin-top:1.25rem;">Array geometry</h3>
+    <div class="form-grid">
+      <label>Array waveguides N_a
+        <input type="number" id="na" value="30" step="2" min="4" max="200" /></label>
+      <label>Array pitch d_aw <span class="unit">(μm)</span>
+        <input type="number" id="daw" value="15.0" step="0.5" min="2" /></label>
+      <label>IO pitch d_io <span class="unit">(μm)</span>
+        <input type="number" id="dio" value="20.0" step="0.5" min="2" /></label>
+      <label>Coupling profile
+        <select id="profile">
+          <option value="uniform">Uniform</option>
+          <option value="gauss" selected>Gaussian</option>
+        </select></label>
+      <label>Gaussian width w <span class="unit">(× N_a)</span>
+        <input type="number" id="gw" value="0.35" step="0.05" min="0.1" max="1.0" /></label>
+    </div>
+
+    <h3 style="margin-top:1.25rem;">Spectrum window</h3>
+    <div class="form-grid">
+      <label>Span <span class="unit">(× FSR)</span>
+        <input type="number" id="span" value="1.0" step="0.1" min="0.1" max="4.0" /></label>
+      <label>Samples
+        <input type="number" id="Npts" value="900" step="50" min="100" max="3000" /></label>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>Designed AWG parameters</h3>
+    <div class="results">
+      <div class="key">Waveguide effective index n_eff_a</div><div class="val" id="nEffA">—</div>
+      <div class="key">Slab effective index n_eff_s (TE)</div><div class="val" id="nEffS">—</div>
+      <div class="key">Group index n_g</div><div class="val" id="nG">—</div>
+      <div class="key">Phase order m</div><div class="val" id="m">—</div>
+      <div class="key">Path difference ΔL</div><div class="val primary" id="dL">—</div>
+      <div class="key">Free spectral range FSR</div><div class="val primary" id="fsr">—</div>
+      <div class="key">Focal length f_l (Rowland)</div><div class="val primary" id="fl">—</div>
+      <div class="key">Total angular sweep on star</div><div class="val" id="sweep">—</div>
+      <div class="key">Channel positions on output face</div><div class="val" id="ports">—</div>
+    </div>
+    <p class="note" id="msg"></p>
+  </div>
+
+  <div class="panel">
+    <p style="color: var(--muted); margin-top: 0;">Top: schematic — input port → input slab (Rowland) → array of N_a waveguides with path increment ΔL → output slab → output ports. Bottom: transmission spectrum at each output port (centred on λ꜀).</p>
+    <canvas id="schematic" height="230"></canvas>
+    <div style="height: 12px;"></div>
+    <canvas id="chart" height="400"></canvas>
+  </div>
+
+  <h2>How it works</h2>
+  <div class="formula">
+    Phase order &amp; path difference: ΔL = m · λ꜀ / n_eff_a. The integer m is the diffraction order seen by every adjacent pair of array waveguides.
+  </div>
+  <div class="formula">
+    Free spectral range: FSR_λ = λ꜀² / (n_g · ΔL). n_g is the group index of the array waveguide (n_g = n_eff − λ · dn_eff/dλ).
+  </div>
+  <div class="formula">
+    Focal length (Rowland circle): f_l = (n_eff_s · d_aw · d_io · n_eff_a) / (m · n_g · Δλ_ch). Sets the linear dispersion x_i = f_l · θ_i on the output star face.
+  </div>
+  <div class="formula">
+    Output port i transmission: T_i(λ) = |Σ_k A_k · exp(j·k·Δφ_i(λ))|² / (Σ A_k)², where Δφ_i = β·ΔL + 2π·n_eff_s·d_aw·θ_i/λ, β = 2π·n_eff_a/λ, θ_i = (i − (N_ch+1)/2)·d_io/f_l.
+  </div>
+
+  <h2>Reference implementations</h2>
+  <p class="links">
+    <a href="https://github.com/chaktb/pic-project/blob/main/awg.py">awg.py</a>
+    <a href="https://github.com/chaktb/pic-project/blob/main/AWG.java">AWG.java</a>
+  </p>
+
+  <footer>JavaScript matches the Python and Java references. AWG formulas after M.K. Smit (1996) / Takahashi (1995); ETRI <code>AWG WDM Design Utility</code> (Shin, 2000) used as cross-check.</footer>
+
+  <script>
+    // ─── Sellmeier silica (Malitson 1965) ─────────────────────────
+    function nSilica(wl) {
+      const B1=0.6961663,B2=0.4079426,B3=0.8974794;
+      const C1=0.0684043**2,C2=0.1162414**2,C3=9.896161**2;
+      const l2=wl*wl;
+      return Math.sqrt(1+B1*l2/(l2-C1)+B2*l2/(l2-C2)+B3*l2/(l2-C3));
+    }
+
+    // ─── Slab fundamental TE mode (symmetric step-index) ──────────
+    function slabFundamentalTE(wl, d, nC, nCl) {
+      if (nC <= nCl) return null;
+      const k0 = 2*Math.PI/wl, a = d/2;
+      const V = k0*a*Math.sqrt(nC*nC - nCl*nCl);
+      const upper = Math.min(Math.PI/2 - 1e-9, V - 1e-12);
+      if (upper <= 0) return null;
+      const f = (u) => { const w = Math.sqrt(Math.max(V*V - u*u, 0)); return u*Math.tan(u) - w; };
+      let lo = 1e-9, hi = upper, flo = f(lo), fhi = f(hi);
+      if (flo*fhi > 0) return null;
+      for (let i = 0; i < 100; i++) {
+        const mid = 0.5*(lo+hi), fmid = f(mid);
+        if (flo*fmid <= 0) { hi = mid; fhi = fmid; }
+        else { lo = mid; flo = fmid; }
+        if (hi - lo < 1e-13) break;
+      }
+      const u = 0.5*(lo+hi);
+      return { kappa: u/a, nEff: Math.sqrt(nC*nC - (u/a/k0)**2) };
+    }
+
+    // ─── EIM for the array waveguide (TE-TE) ─────────────────────
+    // n_eff_a : channel mode index
+    // n_eff_s : slab (=horizontal) effective index — used for the star slab
+    function eim(wl, W, H, deltaPct) {
+      const nC = nSilica(wl), nCl = nC * (1 - deltaPct/100);
+      const v = slabFundamentalTE(wl, H, nC, nCl); if (!v) return null;
+      const h = slabFundamentalTE(wl, W, v.nEff, nCl); if (!h) return null;
+      return { nEffA: h.nEff, nEffS: v.nEff };
+    }
+
+    // ─── Group index of array waveguide via finite difference ────
+    function groupIndex(wl, W, H, deltaPct) {
+      const dwl = wl * 1e-4;
+      const a = eim(wl - dwl, W, H, deltaPct);
+      const b = eim(wl + dwl, W, H, deltaPct);
+      const c = eim(wl, W, H, deltaPct);
+      if (!a || !b || !c) return null;
+      const dnE_dwl = (b.nEffA - a.nEffA) / (2*dwl);
+      return c.nEffA - wl * dnE_dwl;
+    }
+
+    function readParams() {
+      const g = id => parseFloat(document.getElementById(id).value);
+      return {
+        W:g('W'), H:g('H'), dl:g('delta'),
+        lamC:g('lamC'), dlchNm:g('dlch'), nch:Math.max(2, Math.round(g('nch'))),
+        mPref:Math.max(0, Math.round(g('mphase'))),
+        na:Math.max(4, Math.round(g('na'))),
+        daw:g('daw'), dio:g('dio'),
+        profile: document.getElementById('profile').value,
+        gw:g('gw'),
+        span:g('span'), N:Math.max(100, Math.min(3000, parseInt(document.getElementById('Npts').value)||900)),
+      };
+    }
+
+    function design(p) {
+      const at = eim(p.lamC, p.W, p.H, p.dl);
+      if (!at) return null;
+      const ng = groupIndex(p.lamC, p.W, p.H, p.dl) ?? at.nEffA;
+      const dlchUm = p.dlchNm * 1e-3;
+      // m: if user set 0, choose so FSR ≈ (N_ch + safety) · Δλ_ch
+      // Smit recommends FSR ≈ N_ch · Δλ_ch (no overlap of adjacent orders).
+      let m = p.mPref;
+      if (m <= 0) {
+        const fsrTarget = (p.nch + 2) * dlchUm;
+        m = Math.max(1, Math.round(p.lamC*p.lamC / (ng * fsrTarget * (p.lamC/at.nEffA))));
+        // Equivalent to m = round(λ_c · n_eff_a / (n_g · FSR_target))
+      }
+      const dL = m * p.lamC / at.nEffA;                       // μm
+      const fsrUm = p.lamC*p.lamC / (ng * dL);                // μm
+      const fl = (at.nEffS * p.daw * p.dio * at.nEffA) / (m * ng * dlchUm); // μm
+      const sweepRad = (p.nch - 1) * p.dio / fl;
+      return { nEffA: at.nEffA, nEffS: at.nEffS, nG: ng, m, dL, fsrUm, fl, sweepRad };
+    }
+
+    function couplingAmp(p) {
+      const A = new Array(p.na + 1).fill(0);
+      const c = 0.5 * (p.na + 1);
+      let Asum = 0;
+      for (let k = 1; k <= p.na; k++) {
+        if (p.profile === 'gauss') {
+          const x = (k - c) / (p.gw * p.na);
+          A[k] = Math.exp(-x*x);
+        } else {
+          A[k] = 1.0;
+        }
+        Asum += A[k];
+      }
+      return { A, Asum };
+    }
+
+    // Transmission spectra of all N_ch ports
+    function spectrum(p, d) {
+      const half = 0.5 * p.span * d.fsrUm;
+      const wlA = p.lamC - half, wlB = p.lamC + half;
+      const { A, Asum } = couplingAmp(p);
+      const ports = [];
+      for (let i = 1; i <= p.nch; i++) {
+        ports.push({ idx: i, wl: [], T: [] });
+      }
+      const c = 0.5 * (p.na + 1);
+      const cch = 0.5 * (p.nch + 1);
+      for (let n = 0; n < p.N; n++) {
+        const wl = wlA + (wlB - wlA) * n / (p.N - 1);
+        const at = eim(wl, p.W, p.H, p.dl);
+        if (!at) {
+          for (const port of ports) { port.wl.push(wl); port.T.push(NaN); }
+          continue;
+        }
+        const beta = 2*Math.PI*at.nEffA/wl;
+        for (const port of ports) {
+          const theta_i = (port.idx - cch) * p.dio / d.fl;
+          const dphi = beta*d.dL + 2*Math.PI*at.nEffS*p.daw*theta_i/wl;
+          let re = 0, im = 0;
+          for (let k = 1; k <= p.na; k++) {
+            const phi = (k - c) * dphi;
+            re += A[k] * Math.cos(phi);
+            im += A[k] * Math.sin(phi);
+          }
+          const T = (re*re + im*im) / (Asum*Asum);
+          port.wl.push(wl); port.T.push(T);
+        }
+      }
+      return { wlA, wlB, ports };
+    }
+
+    function compute() {
+      const p = readParams();
+      const need = [p.W,p.H,p.dl,p.lamC,p.dlchNm,p.na,p.daw,p.dio,p.span];
+      if (!need.every(Number.isFinite) || p.W<=0||p.H<=0||p.dl<=0||p.lamC<=0||
+          p.dlchNm<=0||p.daw<=0||p.dio<=0||p.span<=0) return;
+
+      const d = design(p);
+      const msg = document.getElementById('msg');
+      const ids = ['nEffA','nEffS','nG','m','dL','fsr','fl','sweep','ports'];
+      if (!d) {
+        ids.forEach(id => document.getElementById(id).textContent = '—');
+        msg.textContent = 'No guided mode for this waveguide / wavelength — adjust W, H, Δ or λ꜀.';
+        msg.className = 'note warn';
+        return;
+      }
+      document.getElementById('nEffA').textContent = d.nEffA.toFixed(6);
+      document.getElementById('nEffS').textContent = d.nEffS.toFixed(6);
+      document.getElementById('nG').textContent    = d.nG.toFixed(6);
+      document.getElementById('m').textContent     = d.m.toString();
+      document.getElementById('dL').textContent    = d.dL.toFixed(4) + ' μm';
+      document.getElementById('fsr').textContent   = (d.fsrUm*1000).toFixed(4) + ' nm';
+      document.getElementById('fl').textContent    = (d.fl*1e-3).toFixed(4) + ' mm';
+      document.getElementById('sweep').textContent = (d.sweepRad*180/Math.PI).toFixed(3) + '°';
+      // port positions x_i = f_l · θ_i
+      const xs = [];
+      const cch = 0.5 * (p.nch + 1);
+      for (let i = 1; i <= p.nch; i++) {
+        xs.push(((i - cch) * p.dio).toFixed(2));
+      }
+      document.getElementById('ports').textContent = '[' + xs.join(', ') + '] μm';
+
+      const fsrNm = d.fsrUm * 1000;
+      const fsrOverCh = fsrNm / p.dlchNm;
+      msg.className = 'note';
+      if (fsrOverCh < p.nch) {
+        msg.className = 'note warn';
+        msg.textContent = `FSR (${fsrNm.toFixed(2)} nm) < N_ch·Δλ_ch (${(p.nch*p.dlchNm).toFixed(2)} nm) — adjacent diffraction orders overlap. Lower m or N_ch.`;
+      } else if (d.sweepRad > 0.7) {
+        msg.className = 'note warn';
+        msg.textContent = 'Total angular sweep exceeds ~40° — the Rowland small-angle approximation degrades. Increase f_l (reduce Δλ_ch · m).';
+      }
+
+      const sp = spectrum(p, d);
+      drawSchematic(p, d);
+      drawSpectrum(sp, d, p);
+    }
+
+    function drawSchematic(p, d) {
+      const canvas = document.getElementById('schematic');
+      const dpr = window.devicePixelRatio || 1;
+      const cssW = canvas.clientWidth || 880, cssH = 230;
+      canvas.width = cssW*dpr; canvas.height = cssH*dpr;
+      canvas.style.height = cssH + 'px';
+      const ctx = canvas.getContext('2d'); ctx.scale(dpr, dpr);
+      const fg = getComputedStyle(document.documentElement).getPropertyValue('--fg').trim();
+      const muted = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim();
+      const core = getComputedStyle(document.documentElement).getPropertyValue('--core').trim() || '#4263eb';
+      const slab = getComputedStyle(document.documentElement).getPropertyValue('--slab').trim() || '#adb5bd';
+
+      const m = { l: 30, r: 30, t: 30, b: 30 };
+      const W = cssW - m.l - m.r, H = cssH - m.t - m.b;
+      const yc = m.t + H/2;
+
+      // Two trapezoid slab regions + array between them
+      const slabW = W*0.18, gapW = W*0.30;
+      const xL1 = m.l + W*0.10, xL2 = xL1 + slabW;
+      const xR2 = m.l + W - W*0.10, xR1 = xR2 - slabW;
+      const arrayN = Math.min(p.na, 24);
+      const flair = H*0.42;   // half-height at slab inner edge
+      const stub  = H*0.10;   // half-height at slab outer edge (input/output port side)
+
+      // Input slab
+      ctx.fillStyle = slab;
+      ctx.beginPath();
+      ctx.moveTo(xL1, yc-stub); ctx.lineTo(xL2, yc-flair);
+      ctx.lineTo(xL2, yc+flair); ctx.lineTo(xL1, yc+stub);
+      ctx.closePath(); ctx.fill();
+      // Output slab
+      ctx.beginPath();
+      ctx.moveTo(xR2, yc-stub); ctx.lineTo(xR1, yc-flair);
+      ctx.lineTo(xR1, yc+flair); ctx.lineTo(xR2, yc+stub);
+      ctx.closePath(); ctx.fill();
+
+      // Array waveguides — arched between (xL2, y_k) and (xR1, y_k)
+      // longer arc for outer waveguides → +ΔL
+      ctx.strokeStyle = core; ctx.lineWidth = 1.4;
+      for (let k = 0; k < arrayN; k++) {
+        const t = (k - (arrayN-1)/2) / Math.max(1, (arrayN-1)/2);   // -1..+1
+        const y0 = yc + t * flair * 0.85;
+        const bump = 30 + Math.abs(t) * 50;   // bigger bump = longer arc
+        ctx.beginPath();
+        ctx.moveTo(xL2, y0);
+        const xm = 0.5*(xL2 + xR1);
+        ctx.bezierCurveTo(xL2 + gapW*0.20, y0 - bump,
+                           xR1 - gapW*0.20, y0 - bump,
+                           xR1, y0);
+        ctx.stroke();
+      }
+
+      // Input waveguide stub
+      ctx.fillStyle = core;
+      ctx.fillRect(m.l, yc-2, xL1 - m.l, 4);
+
+      // Output port stubs — fan out
+      const cch = 0.5 * (p.nch + 1);
+      for (let i = 1; i <= p.nch; i++) {
+        const t = (i - cch) / Math.max(1, p.nch/2);
+        const y = yc + t * stub * 1.8;
+        ctx.fillRect(xR2, y-2, m.l + W - xR2, 4);
+      }
+
+      // Labels
+      ctx.fillStyle = fg; ctx.font = '12px -apple-system, sans-serif';
+      ctx.fillText('input', m.l + 2, yc - 8);
+      ctx.fillText('input slab', xL1, yc + flair + 16);
+      ctx.fillText('array (N_a = ' + p.na + ', ΔL = ' + d.dL.toFixed(2) + ' μm)', xL2 + 4, m.t + 14);
+      ctx.fillText('output slab', xR1, yc + flair + 16);
+      ctx.fillText(p.nch + ' ports', xR2 + 6, yc - flair + 4);
+      ctx.fillStyle = muted; ctx.font = '11px -apple-system, sans-serif';
+      ctx.fillText('f_l = ' + (d.fl*1e-3).toFixed(2) + ' mm    m = ' + d.m, m.l, cssH - 8);
+    }
+
+    function drawSpectrum(sp, d, p) {
+      const canvas = document.getElementById('chart');
+      const dpr = window.devicePixelRatio || 1;
+      const cssW = canvas.clientWidth || 880, cssH = 400;
+      canvas.width = cssW*dpr; canvas.height = cssH*dpr;
+      canvas.style.height = cssH + 'px';
+      const ctx = canvas.getContext('2d'); ctx.scale(dpr, dpr);
+      const fg = getComputedStyle(document.documentElement).getPropertyValue('--fg').trim();
+      const muted = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim();
+      const border = getComputedStyle(document.documentElement).getPropertyValue('--card-border').trim();
+
+      const margin = { l: 60, r: 20, t: 20, b: 50 };
+      const Wp = cssW - margin.l - margin.r, Hp = cssH - margin.t - margin.b;
+      const wlA = sp.wlA, wlB = sp.wlB;
+      const xs = (wl) => margin.l + ((wl - wlA) / (wlB - wlA)) * Wp;
+      // log-scale on y: 0 dB at top, -40 dB at bottom
+      const yMin = -40, yMax = 0;
+      const ys = (T) => {
+        const dB = T > 1e-6 ? 10*Math.log10(T) : yMin;
+        const dBc = Math.max(yMin, Math.min(yMax, dB));
+        return margin.t + (yMax - dBc) / (yMax - yMin) * Hp;
+      };
+
+      // grid
+      ctx.strokeStyle = border; ctx.font = '11px -apple-system, sans-serif';
+      ctx.fillStyle = muted; ctx.setLineDash([3, 3]);
+      [0, -10, -20, -30, -40].forEach(dB => {
+        const y = margin.t + (yMax - dB) / (yMax - yMin) * Hp;
+        ctx.beginPath(); ctx.moveTo(margin.l, y); ctx.lineTo(margin.l + Wp, y); ctx.stroke();
+        ctx.fillText(dB + ' dB', 18, y + 4);
+      });
+      const dWl = wlB - wlA, steps = 6;
+      for (let i = 0; i <= steps; i++) {
+        const wl = wlA + dWl * i / steps, x = xs(wl);
+        ctx.beginPath(); ctx.moveTo(x, margin.t); ctx.lineTo(x, margin.t + Hp); ctx.stroke();
+        ctx.fillText(wl.toFixed(4), x - 16, margin.t + Hp + 14);
+      }
+      ctx.setLineDash([]);
+
+      // axes
+      ctx.strokeStyle = fg;
+      ctx.beginPath();
+      ctx.moveTo(margin.l, margin.t); ctx.lineTo(margin.l, margin.t + Hp);
+      ctx.lineTo(margin.l + Wp, margin.t + Hp); ctx.stroke();
+      ctx.fillStyle = fg; ctx.font = '13px -apple-system, sans-serif';
+      ctx.fillText('λ (μm)', margin.l + Wp - 50, margin.t + Hp + 36);
+      ctx.save();
+      ctx.translate(15, margin.t + Hp/2); ctx.rotate(-Math.PI/2);
+      ctx.fillText('Transmission (dB)', -55, 0); ctx.restore();
+
+      // λ_c marker
+      ctx.strokeStyle = muted; ctx.setLineDash([2, 3]);
+      ctx.beginPath(); ctx.moveTo(xs(p.lamC), margin.t); ctx.lineTo(xs(p.lamC), margin.t + Hp); ctx.stroke();
+      ctx.setLineDash([]);
+
+      // port colours
+      const palette = ['#e03131','#1c7ed6','#37b24d','#f08c00','#ae3ec9','#0ca678','#d6336c','#5c940d',
+                       '#1864ab','#c92a2a','#9b59b6','#16a085','#d35400','#2c3e50','#7f8c8d','#c0392b'];
+
+      sp.ports.forEach((port, idx) => {
+        const color = palette[idx % palette.length];
+        ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        let started = false;
+        for (let i = 0; i < port.wl.length; i++) {
+          if (!Number.isFinite(port.T[i])) { started = false; continue; }
+          const x = xs(port.wl[i]), y = ys(port.T[i]);
+          if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      });
+
+      // legend
+      const lx = margin.l + Wp - 92, ly = margin.t + 8, lh = 14;
+      sp.ports.forEach((port, idx) => {
+        const color = palette[idx % palette.length];
+        const y = ly + idx * lh;
+        if (y + lh > margin.t + Hp - 10) return;
+        ctx.fillStyle = color; ctx.fillRect(lx, y - 3, 14, 3);
+        ctx.fillStyle = fg; ctx.fillText('port ' + port.idx, lx + 18, y + 2);
+      });
+    }
+
+    ['W','H','delta','lamC','dlch','nch','mphase','na','daw','dio','profile','gw','span','Npts'].forEach(id => {
+      document.getElementById(id).addEventListener('input', compute);
+      document.getElementById(id).addEventListener('change', compute);
+    });
+    window.addEventListener('resize', compute);
+    compute();
+  </script>
+</body>
+</html>
