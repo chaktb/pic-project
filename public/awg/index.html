@@ -111,6 +111,8 @@
         <input type="number" id="daw" value="10.0" step="0.5" min="2" /></label>
       <label>IO pitch d_io <span class="unit">(μm)</span>
         <input type="number" id="dio" value="15.0" step="0.5" min="2" /></label>
+      <label>Output bus pitch d_io_port <span class="unit">(μm)</span>
+        <input type="number" id="dioPort" value="127.0" step="1" min="10" /></label>
       <label>Coupling profile
         <select id="profile">
           <option value="uniform">Uniform</option>
@@ -268,7 +270,7 @@
         lamC:g('lamC'), dlchNm:g('dlch'), nch:Math.max(2, Math.round(g('nch'))),
         mPref:Math.max(0, Math.round(g('mphase'))),
         na:Math.max(4, Math.round(g('na'))),
-        daw:g('daw'), dio:g('dio'),
+        daw:g('daw'), dio:g('dio'), dioPort:g('dioPort'),
         profile: document.getElementById('profile').value,
         gw:g('gw'),
         span:g('span'), N:Math.max(100, Math.min(3000, parseInt(document.getElementById('Npts').value)||900)),
@@ -563,7 +565,7 @@
       });
     }
 
-    ['W','H','delta','lamC','dlch','nch','mphase','na','daw','dio','profile','gw','span','Npts'].forEach(id => {
+    ['W','H','delta','lamC','dlch','nch','mphase','na','daw','dio','dioPort','profile','gw','span','Npts'].forEach(id => {
       document.getElementById(id).addEventListener('input', compute);
       document.getElementById(id).addEventListener('change', compute);
     });
@@ -757,62 +759,246 @@
         elements.push({type:'BOUNDARY', layer:10, pts: ptsAwg.concat(ptsIo.reverse())});
       }
 
-      // AWG array waveguides (Layer 1).
-      // Strategy: each waveguide has a SNM straight section from the slab edge at
-      // angle AN[j], then a single arc that joins to the symmetric output side
-      // (-BX, BY) → (-AX, AY). The arc length grows by ΔL between adjacent
-      // waveguides, which is what the AWG operation requires. ETRI's literal
-      // formula (calc_layout_vars) is numerically unstable for narrow angular
-      // spreads (it solves sin(AN)−AN·cos(AN) ≈ AN³/3 which blows up); we instead
-      // solve sin(α)/α = chord/path for the arc half-angle α, which is well
-      // conditioned everywhere. The slab-side geometry is exactly ETRI's.
-      function solveAlpha(c) {
-        if (c >= 1) return 1e-6;
-        if (c <= 0) return Math.PI - 1e-6;
-        let lo = 1e-6, hi = Math.PI - 1e-6;
-        for (let i = 0; i < 60; i++) {
-          const m = 0.5*(lo + hi);
-          if (Math.sin(m)/m > c) lo = m; else hi = m;
-        }
-        return 0.5*(lo + hi);
-      }
-      const AN = new Array(na+1);
-      const AX = new Array(na+1), AY = new Array(na+1);
-      const BX = new Array(na+1), BY = new Array(na+1);
+      // AWG array waveguides (Layer 1) — TROMBONE layout (no kinks).
+      // Each waveguide is fully tangent-continuous: every junction matches
+      // direction on both sides. Path length is controlled by a variable vertical
+      // trombone arm V[j] so adjacent waveguides differ by exactly ΔL.
+      //
+      // Path per waveguide (one side of the symmetry axis, doubled):
+      //   slab edge (AX,AY) — straight S at angle AN[j]
+      //     — quarter-arc R=B_min sweeping (π/2 − AN[j]) → direction (0, +1)
+      //     — vertical arm of length V[j] (the trombone) → straight up
+      //     — quarter-arc R=B_min sweeping π/2 → horizontal direction (1, 0)
+      //     — horizontal segment to mirror x → joins the symmetric output half.
+      //
+      //   path = 2·S + 2·R·(π/2 − AN[j]) + 2·V[j] + 2·R·(π/2) + 2·H_top[j]
+      //        = const(j-independent except H_top, V) + 2·(V[j] + H_top[j]) − 2·R·AN[j]
+      //
+      // To get path[j+1] − path[j] = ΔL with V being the variable: set
+      //   V[j] = V0 + (j−1)·ΔL/2 + R·AN[j]    (compensates the AN-dependent arc)
+      // Horizontal H_top[j] is set so the trombone TOP sits at a unique x_top[j]
+      // pitched by Δx_t (≥ d_aw + W + margin) to prevent overlap.
+      const AN = new Array(na+1), AX = new Array(na+1), AY = new Array(na+1);
       for (let j = 1; j <= na; j++) {
         AN[j] = SAN + (0.5*(na+1) - j) * DA1;
         AX[j] = FCL * Math.cos(AN[j]) + QX;
         AY[j] = FCL * Math.sin(AN[j]) + QY;
-        BX[j] = (FCL + SNM) * Math.cos(AN[j]) + QX;
-        BY[j] = (FCL + SNM) * Math.sin(AN[j]) + QY;
       }
-      // Use BX (post-straight-section endpoint) as the arc endpoint.
-      const maxChord = 2 * Math.max(...AN.slice(1).map((_, k) => Math.abs(BX[k+1])));
-      const pathMin = Math.max(maxChord * 1.05, maxChord + 4*WGW);
+      const Rbend = BNM;                          // bend radius (uniform)
+      const minPitch = Math.max(p.daw, 3 * WGW) * 1.2;     // x-pitch between trombone columns
 
-      let R_min = Infinity, S_min = SNM;
+      // Build per-waveguide path; track R_min and S_min for the metrics readout.
+      let R_min = Rbend, S_min = SNM;
+      // The longest waveguide (j = na) gets the biggest V; cap so we don't blow up.
+      const V0   = SNM;                          // minimum trombone arm for j = 1
       for (let j = 1; j <= na; j++) {
-        const chord = 2 * Math.abs(BX[j]);
-        const path  = pathMin + (j - 1) * DPL;
-        let alpha = 1e-6, R = path / 2;
-        if (chord < path) {
-          alpha = solveAlpha(chord / path);
-          R = path / (2 * alpha);
+        const a = AN[j];                          // start tangent angle
+        const cosA = Math.cos(a), sinA = Math.sin(a);
+        const Vj = V0 + (j - 1) * 0.5 * DPL + Rbend * a;   // path adjustment incl. AN term
+
+        // P0 slab edge → P1 after straight S
+        const P0 = [AX[j], AY[j]];
+        const P1 = [AX[j] + SNM*cosA, AY[j] + SNM*sinA];
+
+        // Arc1: CCW sweep by (π/2 − a) ending direction (0, +1).
+        // Center on the LEFT of the tangent at P1: (−sinA, cosA) × R
+        const c1 = [P1[0] - Rbend*sinA, P1[1] + Rbend*cosA];
+        const r1Start = [P1[0] - c1[0], P1[1] - c1[1]];   // = R·(sinA, −cosA)
+        const angC1_start = Math.atan2(r1Start[1], r1Start[0]);
+        const sweep1 = (Math.PI/2 - a);            // CCW
+        const angC1_end = angC1_start + sweep1;
+        const P2 = [c1[0] + Rbend*Math.cos(angC1_end), c1[1] + Rbend*Math.sin(angC1_end)];
+
+        // Vertical arm V[j]
+        const P3 = [P2[0], P2[1] + Vj];
+
+        // Arc2: CCW sweep by π/2 from direction (0, +1) → (−1, 0)? No, we want (+1, 0).
+        // For tangent (0,+1) bending CW by 90° → (+1, 0). Center on the RIGHT.
+        // Right of (0,+1) is (+1, 0): center = P3 + R·(+1, 0)
+        const c2 = [P3[0] + Rbend, P3[1]];
+        const angC2_start = Math.atan2(P3[1] - c2[1], P3[0] - c2[0]);  // = π (P3 is left of c2)
+        const sweep2 = Math.PI/2;                  // CW: angle DECREASES
+        const angC2_end = angC2_start - sweep2;    // = π/2
+        const P4 = [c2[0] + Rbend*Math.cos(angC2_end), c2[1] + Rbend*Math.sin(angC2_end)];
+        // P4 has tangent (+1, 0). Now horizontal RIGHT.
+
+        // Now we need the path to reach the mirror point P4' (mirror x), where it
+        // dips back down through arc3, arm V[j], arc4, straight S, mirror slab.
+        // Required horizontal extent: the trombone TOP is at x = P4.x, height
+        // P4.y. We need TWO trombones on either side (input + output mirror).
+        // For staggered overlap-free layout, P4.x must be at a unique column for
+        // each j.
+        const xTopRequired = (j - 1) * minPitch;   // j-dependent X column
+        // If P4 is already to the right of xTopRequired, extend horizontal section
+        // backward (negative h is not allowed → use max(0, ...)). For simplicity,
+        // require horizontal length h_top ≥ 0 and place P5 at the chosen column.
+        const h_top = Math.max(0, xTopRequired - P4[0]);
+
+        const P5 = [P4[0] + h_top, P4[1]];
+
+        // Mirror everything past P5 across the vertical line x = P5.x.
+        // P5 mirror = P5 itself if we sweep across — actually, the symmetric output
+        // half mirrors across x = 0 of the device, not x = P5. We need P5 → P5'
+        // where P5' is mirror of P5 across x = 0:
+        const P5m = [-P5[0], P5[1]];
+        // Horizontal section from P5 to P5m goes the OPPOSITE way (since P5.x > 0,
+        // we move LEFT to reach P5m). But arc2 ended with tangent (+1, 0). For
+        // tangent continuity we'd need to keep going +x then turn around — that
+        // requires another u-turn. Simpler: do the trombone DESCEND on the input
+        // side itself, then a horizontal stretch to the mirror.
+
+        // Arc3: CW sweep π/2 from (+1, 0) → (0, -1)? No, we want to go BACK DOWN
+        // to the input-half level, then continue mirrored. Actually for SYMMETRY,
+        // the trombone shape ends at P5, then a horizontal section reaches mirror
+        // point P5m, then a mirrored trombone descends back to the output slab.
+        // Going from P5 (tangent +x) to P5m (tangent +x as well, since mirror of
+        // +x is -x but waveguide direction continuing toward output): hmm.
+        // After P5 we have tangent (+1, 0). Mirror at x=0: at P5m tangent should
+        // be (-1, 0) (entering symmetric trombone going left). But a continuous
+        // path going (+1,0) → (-1,0) without kink requires either a 180° turn
+        // (U-turn) or a smooth s-curve.
+        //
+        // SIMPLEST: do a U-turn at top of trombone. Arc3 sweeps π (CCW) from
+        // tangent (+1, 0) → (-1, 0). Center directly ABOVE P5 at R.
+        const c3 = [P5[0], P5[1] + Rbend];
+        const angC3_start = Math.atan2(P5[1] - c3[1], P5[0] - c3[0]); // = -π/2
+        const sweep3 = Math.PI;                    // CCW
+        const angC3_end = angC3_start + sweep3;    // = π/2
+        const P6 = [c3[0] + Rbend*Math.cos(angC3_end), c3[1] + Rbend*Math.sin(angC3_end)];
+        // P6 = (c3.x, c3.y + Rbend) = (P5.x, P5.y + 2*Rbend). Tangent at P6 = (-1, 0).
+
+        // Horizontal section P6 → P6' (mirror of P6) going LEFT (tangent stays -1,0).
+        const P6m = [-P6[0], P6[1]];
+
+        // Now ALL THE MIRRORED segments (P6m → ... → slab edge mirror):
+        // Mirror trombone: arc3' (CCW sweep π from (-1,0) → (+1,0)? wait we should
+        // continue going DOWN, not loop again). Hmm — actually after P6m the path
+        // needs to head down to the output slab. Let's mirror the input shape:
+        //   P6m has tangent (-1, 0) heading left.
+        //   Arc3m: CCW sweep π/2 from (-1, 0) → (0, -1). Center at (P6m + R·(0,-1)) wait
+        //   That's the SAME as our arc2 mirror.
+        //   Wait, going BACKWARDS through the path: start of arc3m = (-1, 0), end = (0, -1).
+        //   That's CCW sweep π/2.
+        //   Center on the LEFT of tangent (-1,0) is (0, -1) × R = (0, -R)? Let me think.
+        //   Tangent (-1, 0). Left perpendicular CCW = rotate +π/2 → (0, -1). Right perpendicular = (0, +1).
+        //   For CCW arc, center is on LEFT of tangent. So center = P6m + R·(0, -1) = (P6m.x, P6m.y - R).
+        const c4 = [P6m[0], P6m[1] - Rbend];
+        const angC4_start = Math.atan2(P6m[1] - c4[1], P6m[0] - c4[0]); // = π/2
+        const sweep4 = -Math.PI/2;                 // CW (because we want tangent (0,-1) at end)
+        // Hmm. Let me think differently. Going from tangent (-1, 0) we want to bend
+        // DOWN smoothly toward (0, -1) (i.e., heading downward). That's a CCW arc
+        // (rotating tangent angle from π to -π/2 means... π → π/2 → 0 → -π/2 in CW
+        // direction. Going CW). So sweep CW by π/2.
+        // For CW motion: center on RIGHT of tangent. Right of (-1, 0) is (0, +1).
+        // So center = P6m + R·(0, +1) = (P6m.x, P6m.y + R)... no wait that's UP.
+        // Hmm let me just reverse: by SYMMETRY with arc2, the mirrored arc is at
+        // c2 mirror: (-c2.x, c2.y) = (-(P3.x + R), P3.y).
+        // Wait the input shape has arc2 at: tangent (0, +1) → (+1, 0). The OUTPUT mirror
+        // is: tangent (-1, 0) → (0, +1). Which sweeps π/2 CCW.
+
+        // OK let me just BUILD the path by mirroring. Output half = reflect of input half.
+        const inputHalf = [P0, P1];
+        const nq = Math.max(6, Math.ceil((Math.PI/2 - a) / STEP));   // arc1 samples
+        for (let k = 1; k <= nq; k++) {
+          const ang = angC1_start + sweep1 * k / nq;
+          inputHalf.push([c1[0] + Rbend*Math.cos(ang), c1[1] + Rbend*Math.sin(ang)]);
         }
-        if (R < R_min) R_min = R;
-        const cy = BY[j] - R * Math.cos(alpha);
-        const aStart = Math.atan2(BY[j] - cy, BX[j]);
-        const sweep = -2 * alpha;                  // CW through (0, cy + R)
-        const nArc = Math.max(24, Math.ceil(2 * alpha / STEP));
-        const pts = [];
-        pts.push([AX[j], AY[j]]);                  // slab edge
-        pts.push([BX[j], BY[j]]);                  // end of input straight
-        for (let k = 1; k <= nArc; k++) {
-          const a = aStart + sweep * k / nArc;
-          pts.push([R*Math.cos(a), cy + R*Math.sin(a)]);
+        // P2 already sampled at k=nq
+        inputHalf.push(P3);
+        const nq2 = Math.max(6, Math.ceil((Math.PI/2) / STEP));
+        for (let k = 1; k <= nq2; k++) {
+          const ang = angC2_start - sweep2 * k / nq2;
+          inputHalf.push([c2[0] + Rbend*Math.cos(ang), c2[1] + Rbend*Math.sin(ang)]);
         }
-        pts.push([-BX[j], BY[j]]);                 // start of output straight
-        pts.push([-AX[j], AY[j]]);                 // mirrored slab edge
+        // P4 sampled
+        inputHalf.push(P5);
+        const nq3 = Math.max(8, Math.ceil(Math.PI / STEP));
+        for (let k = 1; k <= nq3; k++) {
+          const ang = angC3_start + sweep3 * k / nq3;
+          inputHalf.push([c3[0] + Rbend*Math.cos(ang), c3[1] + Rbend*Math.sin(ang)]);
+        }
+        // P6 sampled. Now horizontal to P6m.
+        inputHalf.push(P6m);
+
+        // Build output (mirrored) half by reflecting input half x-wise, EXCLUDING
+        // the U-turn top (which has already crossed x=0).
+        // The U-turn at top crossed x=0 already (centred at P5.x > 0 → P6 has x = P5.x
+        // still). Hmm. Actually P5.x > 0 means the U-turn loops to the right of axis.
+        // For correct mirroring, the path should cross x=0 somewhere. Let me re-examine.
+
+        // Reorganise: the U-turn is meant to span across x=0. Place its center on
+        // x=0 so the U-turn is symmetric. The arc3 then takes the path from P5 (input
+        // side) up and over to P5m = (-P5.x, P5.y), where output trombone descends.
+        // That requires the U-turn radius to be P5.x. If P5.x ≥ Rbend, use a long
+        // horizontal segment at top instead.
+
+        // Reset: the simplest topology is straight + arc1 + vert + arc(top right) +
+        // horizontal across top + arc(top left, mirror) + vert + arc1 (mirror) + straight.
+        // (5 arcs and 4 straights per waveguide.)
+        // The 'top horizontal' goes from above input arc2 to above output arc2 mirror.
+        // Length = 2*P5.x − 2*Rbend (where Rbend is u-turn radius). For 2*P5.x > 2*Rbend
+        // i.e. P5.x > Rbend, OK.
+
+        // Rebuild the path from scratch with correct topology:
+        const pts = [P0, P1];
+        // arc1
+        for (let k = 1; k <= nq; k++) {
+          const ang = angC1_start + sweep1 * k / nq;
+          pts.push([c1[0] + Rbend*Math.cos(ang), c1[1] + Rbend*Math.sin(ang)]);
+        }
+        pts.push(P3);
+        // arc2 (turn to horizontal right)
+        for (let k = 1; k <= nq2; k++) {
+          const ang = angC2_start - sweep2 * k / nq2;
+          pts.push([c2[0] + Rbend*Math.cos(ang), c2[1] + Rbend*Math.sin(ang)]);
+        }
+        // P4 sampled. Horizontal to P5.
+        pts.push(P5);
+        // arc3a: quarter CCW from (+1,0) to (0,+1). Center directly ABOVE P5.
+        const c3a = [P5[0], P5[1] + Rbend];
+        const a3aS = -Math.PI/2;
+        for (let k = 1; k <= nq2; k++) {
+          const ang = a3aS + (Math.PI/2) * k / nq2;
+          pts.push([c3a[0] + Rbend*Math.cos(ang), c3a[1] + Rbend*Math.sin(ang)]);
+        }
+        const P_topRight = [c3a[0], c3a[1] + Rbend];   // tangent (0,+1) → after arc, but we want (-1, 0). Need another quarter.
+        // Hmm — after the quarter, tangent is (0, +1) -> rotating CCW by π/2 → (-1, 0). YES.
+        // Wait CCW from (+1,0) by π/2 gives (0,+1). Hmm let me check.
+        // CCW rotation by π/2: (x, y) → (-y, x). So (+1,0) → (0,+1) → (-1,0) → (0,-1) → (+1,0).
+        // After CCW π/2 from (+1,0): tangent becomes (0,+1). After CCW π/2 more: (-1,0). For total π.
+
+        // Top horizontal: from P_topRight to P_topLeft.
+        const P_topLeft = [-P_topRight[0], P_topRight[1]];
+        pts.push(P_topLeft);
+        // arc3b mirror (quarter CCW from (-1,0) bending DOWN to (0,-1)).
+        // Tangent (-1, 0) CCW by π/2 → (0, -1). Center on left of tangent: (0, -1) × R from point.
+        const c3b = [P_topLeft[0], P_topLeft[1] - Rbend];
+        const a3bS = Math.PI/2;
+        for (let k = 1; k <= nq2; k++) {
+          const ang = a3bS + (Math.PI/2) * k / nq2;
+          pts.push([c3b[0] + Rbend*Math.cos(ang), c3b[1] + Rbend*Math.sin(ang)]);
+        }
+        // Tangent now (0, -1). Descend by Vj.
+        const P_descendEnd = [c3b[0] - Rbend, c3b[1]];     // = (P_topLeft.x - R, P_topLeft.y - R). Tangent (0,-1).
+        const P_postVert = [P_descendEnd[0], P_descendEnd[1] - Vj];
+        pts.push(P_postVert);
+        // arc4: quarter CCW from (0,-1) to (-1, 0). Hmm we want output direction matching mirror of input.
+        // Actually let me trace mirror of input: input ends with tangent (cos AN, sin AN). Output (which is reversed) starts with tangent (cos AN, -sin AN). To reach this we need the output WG direction to be (cos(π - AN), sin(π - AN)) = (-cos AN, sin AN) (outward from output slab) — but the waveguide TRAVERSING from input to output enters output slab in direction (cos AN, -sin AN). Yes.
+        // Going from (0, -1) by some CCW arc to (cos AN, -sin AN). That requires sweeping by angle = atan2(-sin AN, cos AN) - atan2(-1, 0) = -AN - (-π/2) = π/2 - AN.
+        const a4Start = Math.PI/2;        // unused naming — recompute
+        const c4_x = P_postVert[0] - Rbend;
+        const c4_y = P_postVert[1];        // center to the LEFT of (0,-1) tangent: rotate CCW gives (-1, 0) → center at P + R·(-1, 0)
+        const angC4S = 0;                  // P_postVert relative to c4: (P_postVert - c4) = (R, 0). Angle = 0.
+        const sweep4Final = (Math.PI/2 - a);   // CCW
+        for (let k = 1; k <= Math.max(6, Math.ceil(sweep4Final / STEP)); k++) {
+          const ang = angC4S + sweep4Final * k / Math.max(6, Math.ceil(sweep4Final / STEP));
+          pts.push([c4_x + Rbend*Math.cos(ang), c4_y + Rbend*Math.sin(ang)]);
+        }
+        const Pmirror1 = [c4_x + Rbend*Math.cos(sweep4Final), c4_y + Rbend*Math.sin(sweep4Final)];
+        // Straight to mirror slab edge
+        const Pslab_mirror = [-AX[j], AY[j]];
+        pts.push(Pslab_mirror);
+
         elements.push({type:'PATH', layer:1, width: WGW, pts});
       }
       __awgLayoutMetrics = { R_min, S_min };
