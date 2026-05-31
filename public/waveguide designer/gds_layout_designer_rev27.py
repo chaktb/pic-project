@@ -14,7 +14,7 @@ Workflow
 1. Add layers (name, GDS layer/datatype, colour, default width)
 2. Add one or more "base" ports (user-defined anchors, e.g. chip I/O)
 3. Build the waveguide as a sequence of segments:
-       LINE / ARC / SBEND / EULER / TAPER
+       LINE / ARC / SBEND / REL_BENT / EULER / TAPER
    Each segment starts at a selected port number and generates a new
    endpoint port whose number is appended to the port table.
    The next segment simply picks that new number as its start.
@@ -25,10 +25,15 @@ Workflow
    editable in the UI.
 6. Export to GDS via gdsfactory (add_polygon).
 
+(New in rev27) REL_BENT segment — an "offset bend" built from two equal
+circular arcs of a fixed radius R that reaches a lateral offset `dy`
+while the heading returns to the start angle (the bend always ENDS at
+0° relative to the start port).  θ = arccos(1 − |dy|/(2R)).
+
 Requires:  python3, tkinter, numpy, matplotlib, gdsfactory
     pip install numpy matplotlib gdsfactory
 
-Author: generated for Sangjun (FiberPro PDL) — rev 25  (auto bend-offset)
+Author: generated for Sangjun (FiberPro PDL) — rev 27  (rel_bent offset bend)
 """
 
 from __future__ import annotations
@@ -1769,9 +1774,9 @@ class WaveguideApp:
     def _show_about(self):
         messagebox.showinfo(
             "About",
-            "Waveguide Layout Designer (OlympiOS-style)\n\n"
+            "Waveguide Layout Designer (OlympiOS-style) — rev27\n\n"
             "Build a photonic waveguide as a sequence of primitives\n"
-            "(LINE / ARC / SBEND / EULER / TAPER) starting from\n"
+            "(LINE / ARC / SBEND / REL_BENT / EULER / TAPER) starting from\n"
             "user-defined base ports. Each segment's endpoint is\n"
             "added to the port list so the next segment can chain\n"
             "off it automatically.\n\n"
