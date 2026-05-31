@@ -25,10 +25,13 @@ Workflow
    editable in the UI.
 6. Export to GDS via gdsfactory (add_polygon).
 
-(New in rev27) REL_BENT segment — an "offset bend" built from two equal
-circular arcs of a fixed radius R that reaches a lateral offset `dy`
-while the heading returns to the start angle (the bend always ENDS at
-0° relative to the start port).  θ = arccos(1 − |dy|/(2R)).
+(New in rev27) REL_BENT segment — an "offset bend" of fixed radius R that
+ALWAYS ends pointing at absolute 0° (+x), arriving at the ABSOLUTE target y
+given by `dy`. It works for any incoming heading: one arc straightens the
+heading to 0°, then a symmetric two-arc S-bend supplies the residual y so
+the endpoint lands exactly at (·, dy) heading 0°. `dy` accepts the helper
+yoffset(n) which returns segment n's absolute end-y, e.g. dy = yoffset(5)
+routes the bend to segment 5's y.
 
 Requires:  python3, tkinter, numpy, matplotlib, gdsfactory
     pip install numpy matplotlib gdsfactory
@@ -950,60 +953,74 @@ def segment_geometry(
         end_w = w0
 
     elif kind == "rel_bent":
-        # Relative bend ("offset bend"): two equal circular arcs of fixed
-        # radius R that reach a target y while the heading returns to the
-        # start heading (net angle change = 0, so the bend always ENDS at
-        # 0° relative to the start port).
+        # Offset bend that ALWAYS ENDS pointing at absolute 0° (+x global),
+        # arriving at the ABSOLUTE target y given by `dy`.
         #
-        #   first arc  : curvature +s/R, turns by +s·θ
-        #   second arc : curvature −s/R, turns by −s·θ  → back to start angle
+        # Built as a two-arc biarc of fixed radius R whose tangent heading
+        # runs  a0 → θ_m → 0  (in the global frame): the first arc turns the
+        # incoming heading a0 to an intermediate θ_m, the second arc turns
+        # θ_m back to 0°. Both arcs have radius R, opposite curvature (an
+        # S-shape). The intermediate angle θ_m is chosen so the net vertical
+        # travel equals the required shift H = dy − y0:
         #
-        # `dy` is interpreted as the ABSOLUTE target y coordinate (not a
-        # relative shift). The lateral displacement actually applied is
-        #       h_signed = dy − y0        (y0 = effective start y)
-        # so e.g. dy = yoffset(5) routes this bend to the same absolute y
-        # as segment 5's endpoint. (Absolute-y targeting assumes a roughly
-        # horizontal start heading, the usual rel_bent use case.)
+        #       H = R·(cos a0 + 1 − 2·cos θ_m)
+        #   →   θ_m = ±·acos( (cos a0 + 1 − |H|/R) / 2 )
         #
-        # With h = |h_signed|:
-        #       h = 2 R (1 − cos θ)   →   θ = arccos(1 − h/(2R))
-        # The per-arc angle θ is fully determined by R and h.
-        # Reachable range: h ≤ 4R (θ ≤ 180°); larger values are clamped.
+        # `dy` is the ABSOLUTE target y, so e.g. dy = yoffset(5) routes this
+        # bend to segment 5's absolute end-y. Works for any incoming angle
+        # a0 — the bend straightens the heading to 0° regardless.
+        # Reachable range: |H| ≤ R·(cos a0 + 1) + 2R (cos θ_m clamped).
         R  = float(params["radius"])
-        dy_target = float(params["dy"])     # absolute target y
-        h_signed  = dy_target - y0          # lateral displacement to apply
-        s  = 1.0 if h_signed >= 0 else -1.0
-        h  = abs(h_signed)
-        if R <= 0 or h == 0.0:
-            # degenerate → straight stub along the start heading
-            xl = np.array([0.0, 0.0])
-            yl = np.array([0.0, h_signed])
-            widths = np.array([w0, w0])
-            end_xl, end_yl = 0.0, h_signed
+        dy_target = float(params["dy"])      # absolute target y
+        H  = dy_target - y0                   # required global y shift
+        a0r = math.radians(a0)                # incoming heading [rad, global]
+
+        # (1) one radius-R arc straightens the heading a0 → 0; its own
+        #     vertical travel is Δy_A. (2) a symmetric two-arc S-bend
+        #     (heading 0 → ±θ → 0) supplies the remaining shift H_res so
+        #     that total Δy = H. Both stages end at heading 0°, so the
+        #     whole bend ALWAYS ends at absolute 0°.
+        dyA = (R * math.copysign(1.0, -a0r) * (math.cos(a0r) - 1.0)
+               if abs(a0r) > 1e-12 else 0.0)
+        H_res = H - dyA
+        s = 1.0 if H_res >= 0 else -1.0
+        c = 1.0 - min(abs(H_res), 4.0 * R) / (2.0 * R)
+        c = max(-1.0, min(1.0, c))
+        theta = math.acos(c)                  # per-arc angle of the S-bend
+
+        # heading waypoints (global): arc A then the S-bend's two arcs
+        waypts = []
+        if abs(a0r) > 1e-12:
+            waypts.append((a0r, 0.0))         # arc A: straighten to 0°
+        if abs(H_res) > 1e-12 and R > 0:
+            waypts.append((0.0, s * theta))   # S arc 1
+            waypts.append((s * theta, 0.0))   # S arc 2
+
+        if R <= 0 or not waypts:
+            # nothing to do (already at target y and heading 0°)
+            xl = np.array([0.0, 0.0]); yl = np.array([0.0, 0.0])
+            widths = np.array([w0, w0]); end_xl = end_yl = 0.0
         else:
-            c = 1.0 - min(h, 4.0 * R) / (2.0 * R)
-            c = max(-1.0, min(1.0, c))
-            theta = math.acos(c)
-            half = max(2, n_pts // 2)
-            phi = np.linspace(0.0, theta, half)
-            # first arc (curving toward +s side)
-            x1 = R * np.sin(phi)
-            y1 = s * R * (1.0 - np.cos(phi))
-            # junction state (end of first arc)
-            xm, ym = float(x1[-1]), float(y1[-1])
-            am = s * theta
-            ca2, sa2 = math.cos(am), math.sin(am)
-            # second arc: opposite curvature, built in the junction's local
-            # frame then rotated/translated into the segment frame
-            xl2 = R * np.sin(phi)
-            yl2 = -s * R * (1.0 - np.cos(phi))
-            x2 = xm + xl2 * ca2 - yl2 * sa2
-            y2 = ym + xl2 * sa2 + yl2 * ca2
-            xl = np.concatenate([x1, x2[1:]])
-            yl = np.concatenate([y1, y2[1:]])
+            k = max(2, n_pts // len(waypts))
+            parts = []
+            for i, (pa, pb) in enumerate(waypts):
+                seg = np.linspace(pa, pb, k)
+                parts.append(seg if i == 0 else seg[1:])
+            phg = np.concatenate(parts)       # global tangent heading
+            # integrate position in the GLOBAL frame (ds = R·|dφ| per arc),
+            # midpoint headings → 2nd-order accurate centreline
+            dphi = np.diff(phg)
+            ds   = R * np.abs(dphi)
+            cosm = np.cos((phg[:-1] + phg[1:]) * 0.5)
+            sinm = np.sin((phg[:-1] + phg[1:]) * 0.5)
+            Xg = np.concatenate(([x0], x0 + np.cumsum(cosm * ds)))
+            Yg = np.concatenate(([y0], y0 + np.cumsum(sinm * ds)))
+            # convert global → local (inverse of the rotation applied below)
+            xl = (Xg - x0) * ca + (Yg - y0) * sa
+            yl = -(Xg - x0) * sa + (Yg - y0) * ca
             widths = np.full_like(xl, w0)
             end_xl, end_yl = float(xl[-1]), float(yl[-1])
-        end_a = a0                 # heading returns to the start heading
+        end_a = 0.0                # ALWAYS ends at absolute 0° (+x)
         end_w = w0
 
     elif kind == "euler":
@@ -1524,7 +1541,7 @@ SEG_DISPLAY = {
     "arc":         "ARC           (circular bend, uniform width)",
     "tapered_arc": "TAPERED ARC   (bend + linear width change)",
     "sbend":       "SBEND         (cosine S-bend)",
-    "rel_bent":    "REL_BENT      (offset bend → absolute y target, ends at 0°)",
+    "rel_bent":    "REL_BENT      (→ absolute y target, always ends at 0°)",
     "euler":       "EULER         (clothoid bend)",
     "taper":       "TAPER         (width transition, straight)",
     "spiral":      "SPIRAL        (Archimedean double spiral, compact delay line)",
