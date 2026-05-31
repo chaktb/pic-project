@@ -951,27 +951,35 @@ def segment_geometry(
 
     elif kind == "rel_bent":
         # Relative bend ("offset bend"): two equal circular arcs of fixed
-        # radius R that reach a lateral offset `dy` while the heading
-        # returns to the start heading (net angle change = 0, so the bend
-        # always ENDS at 0° relative to the start port).
+        # radius R that reach a target y while the heading returns to the
+        # start heading (net angle change = 0, so the bend always ENDS at
+        # 0° relative to the start port).
         #
         #   first arc  : curvature +s/R, turns by +s·θ
         #   second arc : curvature −s/R, turns by −s·θ  → back to start angle
         #
-        # Net lateral offset after both arcs:
-        #       dy = 2 R (1 − cos θ)   →   θ = arccos(1 − |dy|/(2R))
-        # so the per-arc angle θ is fully determined by R and dy.
-        # Reachable range: |dy| ≤ 4R (θ ≤ 180°); larger values are clamped.
+        # `dy` is interpreted as the ABSOLUTE target y coordinate (not a
+        # relative shift). The lateral displacement actually applied is
+        #       h_signed = dy − y0        (y0 = effective start y)
+        # so e.g. dy = yoffset(5) routes this bend to the same absolute y
+        # as segment 5's endpoint. (Absolute-y targeting assumes a roughly
+        # horizontal start heading, the usual rel_bent use case.)
+        #
+        # With h = |h_signed|:
+        #       h = 2 R (1 − cos θ)   →   θ = arccos(1 − h/(2R))
+        # The per-arc angle θ is fully determined by R and h.
+        # Reachable range: h ≤ 4R (θ ≤ 180°); larger values are clamped.
         R  = float(params["radius"])
-        dy = float(params["dy"])
-        s  = 1.0 if dy >= 0 else -1.0
-        h  = abs(dy)
+        dy_target = float(params["dy"])     # absolute target y
+        h_signed  = dy_target - y0          # lateral displacement to apply
+        s  = 1.0 if h_signed >= 0 else -1.0
+        h  = abs(h_signed)
         if R <= 0 or h == 0.0:
             # degenerate → straight stub along the start heading
             xl = np.array([0.0, 0.0])
-            yl = np.array([0.0, dy])
+            yl = np.array([0.0, h_signed])
             widths = np.array([w0, w0])
-            end_xl, end_yl = 0.0, dy
+            end_xl, end_yl = 0.0, h_signed
         else:
             c = 1.0 - min(h, 4.0 * R) / (2.0 * R)
             c = max(-1.0, min(1.0, c))
@@ -1261,7 +1269,7 @@ class Project:
         seg = Segment(self.new_sid(), kind, start_pid, 0, layer_idx, dict(params))
         # create an endpoint port *now* and keep its pid stable forever
         _res = segment_geometry(
-            kind, start, seg.params, globals_dict=self.globals)
+            kind, start, seg.params, globals_dict=self.eval_globals())
         ex, ey, ea, ew = _res[2]
         end_port = Port(end_pid, ex, ey, ea, ew, layer_idx,
                         label=f"S{seg.sid}", is_base=False)
@@ -1299,6 +1307,34 @@ class Project:
                 d[s.end_pid] = s
         return d
 
+    def _yoffset(self, sid) -> float:
+        """Absolute global y of segment ``sid``'s endpoint port.
+
+        Exposed to param expressions as ``yoffset(n)`` so a segment can
+        reference another segment's absolute y — e.g. a rel_bent with
+        ``dy = yoffset(5)`` routes to the same y as segment 5's end.
+        The referenced segment must already be built (i.e. appear earlier
+        in the sequence) for its endpoint y to be current.
+        """
+        try:
+            sid = int(sid)
+        except (TypeError, ValueError):
+            raise ValueError(f"yoffset(): invalid segment id {sid!r}")
+        seg = next((s for s in self.segments if s.sid == sid), None)
+        if seg is None:
+            raise ValueError(f"yoffset(): segment {sid} not found")
+        port = self.get_port(seg.end_pid)
+        if port is None:
+            raise ValueError(f"yoffset(): segment {sid} has no endpoint port")
+        return float(port.y)
+
+    def eval_globals(self) -> Dict:
+        """Globals namespace for param-expression evaluation: the user's
+        globals plus built-in helper callables (currently ``yoffset``)."""
+        ns = dict(self.globals)
+        ns["yoffset"] = self._yoffset
+        return ns
+
     def effective_params(self, seg: "Segment",
                           prev_map: Optional[Dict[int, "Segment"]] = None
                           ) -> Dict:
@@ -1312,10 +1348,11 @@ class Project:
         if prev_map is None:
             prev_map = self._prev_by_start()
         prev_seg = prev_map.get(seg.start_pid)
+        G = self.eval_globals()
         auto_off = junction_offset(prev_seg, seg, self.platform,
-                                    globals_dict=self.globals)
+                                    globals_dict=G)
         if auto_off != 0.0:
-            user_yoff = _resolve_num(eff.get("yoffset", 0.0), self.globals) or 0.0
+            user_yoff = _resolve_num(eff.get("yoffset", 0.0), G) or 0.0
             eff["yoffset"] = user_yoff + auto_off
         return eff
 
@@ -1331,6 +1368,7 @@ class Project:
         """
         by_pid = {p.pid: p for p in self.ports}
         prev_map = self._prev_by_start()
+        G = self.eval_globals()
 
         self.offset_log = []
 
@@ -1348,7 +1386,7 @@ class Project:
                 # that means auto-offset was injected. Record for the UI.
                 prev_seg = prev_map.get(seg.start_pid)
                 user_yoff = _resolve_num(seg.params.get("yoffset", 0.0),
-                                          self.globals) or 0.0
+                                          G) or 0.0
                 off_val = float(eff_params["yoffset"]) - user_yoff
                 if abs(off_val) > 1e-15:
                     self.offset_log.append({
@@ -1362,7 +1400,7 @@ class Project:
 
             try:
                 _res = segment_geometry(
-                    seg.kind, start, eff_params, globals_dict=self.globals)
+                    seg.kind, start, eff_params, globals_dict=G)
                 ex, ey, ea, ew = _res[2]
             except Exception:
                 continue
@@ -1469,7 +1507,7 @@ SEG_PARAMS: Dict[str, List[Tuple[str, str, float]]] = {
     "sbend":       [("dx",        "dx [µm]",         300.0),
                     ("dy",        "dy [µm]  (±)",    100.0)],
     "rel_bent":    [("radius",    "Bend radius [µm]", 500.0),
-                    ("dy",        "Lateral offset dy [µm] (±)", 100.0)],
+                    ("dy",        "Target y [µm] (abs; e.g. yoffset(5))", 100.0)],
     "euler":       [("radius",    "End radius [µm]", 500.0),
                     ("angle",     "Angle [deg] (±)",  90.0)],
     "taper":       [("length",    "Length [µm]",     200.0),
@@ -1486,7 +1524,7 @@ SEG_DISPLAY = {
     "arc":         "ARC           (circular bend, uniform width)",
     "tapered_arc": "TAPERED ARC   (bend + linear width change)",
     "sbend":       "SBEND         (cosine S-bend)",
-    "rel_bent":    "REL_BENT      (offset bend, two arcs, ends at 0°)",
+    "rel_bent":    "REL_BENT      (offset bend → absolute y target, ends at 0°)",
     "euler":       "EULER         (clothoid bend)",
     "taper":       "TAPER         (width transition, straight)",
     "spiral":      "SPIRAL        (Archimedean double spiral, compact delay line)",
@@ -2516,7 +2554,7 @@ class WaveguideApp:
             _res = segment_geometry(
                 seg.kind, start,
                 self.project.effective_params(seg, prev_map),
-                globals_dict=self.project.globals)
+                globals_dict=self.project.eval_globals())
         except Exception:
             return None
         path = _res[0]
@@ -2638,7 +2676,7 @@ class WaveguideApp:
                 _res = segment_geometry(
                     seg.kind, start,
                     self.project.effective_params(seg, prev_map),
-                    globals_dict=self.project.globals)
+                    globals_dict=self.project.eval_globals())
                 path   = _res[0]; widths = _res[1]
                 extra_polys = _res[3] if len(_res) > 3 else None
             except Exception as e:
@@ -2720,7 +2758,7 @@ class WaveguideApp:
                 _res = segment_geometry(
                     seg.kind, start,
                     self.project.effective_params(seg, prev_map),
-                    globals_dict=self.project.globals)
+                    globals_dict=self.project.eval_globals())
                 path = _res[0]
                 extra_polys = _res[3] if len(_res) > 3 else None
             except Exception:
@@ -2895,7 +2933,7 @@ class WaveguideApp:
                     seg.kind, start,
                     self.project.effective_params(seg, prev_map),
                     n_pts=200,
-                    globals_dict=self.project.globals)
+                    globals_dict=self.project.eval_globals())
                 path    = _res[0]; widths = _res[1]
                 extra_p = _res[3] if len(_res) > 3 else None
             except Exception:
@@ -3613,7 +3651,9 @@ class WaveguideApp:
                     f"Port {end_pid} already exists. Choose a free number "
                     f"(or leave blank for auto).")
                 return
-        G = self.project.globals   # so users can type global-variable names
+        # so users can type global-variable names AND helper calls like
+        # yoffset(n) (segment n's absolute end-y) in numeric fields
+        G = self.project.eval_globals()
 
         # Width — validate that it evaluates NOW; store the raw expression
         # so that subsequent changes to globals keep flowing through.
@@ -3676,7 +3716,7 @@ class WaveguideApp:
         if seg is None: return
         dlg = SegmentDialog(self.root, f"Edit Segment {sid}",
                             self.project.layers, seg,
-                            globals_dict=self.project.globals)
+                            globals_dict=self.project.eval_globals())
         if dlg.result is None: return
         self._push_undo()
         seg.kind = dlg.result["kind"]
@@ -3808,7 +3848,7 @@ class WaveguideApp:
                     seg.kind, start,
                     self.project.effective_params(seg, prev_map),
                     n_pts=300,
-                    globals_dict=self.project.globals)
+                    globals_dict=self.project.eval_globals())
                 pxy = _res[0]; widths = _res[1]
                 extra_polys = _res[3] if len(_res) > 3 else None
                 L = self.project.layers[seg.layer_idx]
