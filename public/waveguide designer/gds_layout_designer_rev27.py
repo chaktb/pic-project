@@ -1241,16 +1241,29 @@ class Project:
 
     # ---- segments ----------------------------------------------------------
     def add_segment(self, kind: str, start_pid: int, layer_idx: int,
-                    params: Dict) -> Segment:
+                    params: Dict, end_pid: Optional[int] = None) -> Segment:
         start = self.get_port(start_pid)
         if start is None:
             raise RuntimeError(f"Start port {start_pid} does not exist.")
+        # endpoint port id: caller may request a specific number; otherwise
+        # one is auto-assigned. A requested number must be free.
+        if end_pid is None:
+            end_pid = self.new_pid()
+        else:
+            if end_pid <= 0:
+                raise RuntimeError("End port # must be a positive integer.")
+            if self.get_port(end_pid) is not None:
+                raise RuntimeError(
+                    f"Port {end_pid} already exists; choose a free number "
+                    f"for the end port.")
+            # keep auto-numbering ahead of any user-chosen id
+            self._next_pid = max(self._next_pid, end_pid + 1)
         seg = Segment(self.new_sid(), kind, start_pid, 0, layer_idx, dict(params))
         # create an endpoint port *now* and keep its pid stable forever
         _res = segment_geometry(
             kind, start, seg.params, globals_dict=self.globals)
         ex, ey, ea, ew = _res[2]
-        end_port = Port(self.new_pid(), ex, ey, ea, ew, layer_idx,
+        end_port = Port(end_pid, ex, ey, ea, ew, layer_idx,
                         label=f"S{seg.sid}", is_base=False)
         seg.end_pid = end_port.pid
         self.ports.append(end_port)
@@ -2288,7 +2301,12 @@ class WaveguideApp:
         self.start_pid_var = tk.StringVar(value="1")
         ttk.Entry(row, textvariable=self.start_pid_var, width=6
                   ).pack(side=tk.LEFT, padx=4)
-        ttk.Label(row, text="(end auto-assigned)").pack(side=tk.LEFT)
+        ttk.Label(row, text="End port #:").pack(side=tk.LEFT, padx=(8, 0))
+        self.end_pid_var = tk.StringVar(value="")
+        ttk.Entry(row, textvariable=self.end_pid_var, width=6
+                  ).pack(side=tk.LEFT, padx=4)
+        ttk.Label(row, text="(blank = auto)",
+                  foreground="#666").pack(side=tk.LEFT)
 
         row = ttk.Frame(fbox); row.pack(fill=tk.X, padx=4, pady=3)
         ttk.Label(row, text="Layer:").pack(side=tk.LEFT)
@@ -3435,6 +3453,29 @@ class WaveguideApp:
             messagebox.showerror("Add segment",
                                  f"Port {start_pid} does not exist.")
             return
+
+        # End port # — blank means auto-assign (default). If the user types
+        # a number it must be a positive, currently-free port id.
+        end_txt = self.end_pid_var.get().strip()
+        end_pid = None
+        if end_txt:
+            try:
+                end_pid = int(end_txt)
+            except ValueError:
+                messagebox.showerror(
+                    "Add segment",
+                    "End port # must be an integer (or blank for auto).")
+                return
+            if end_pid <= 0:
+                messagebox.showerror("Add segment",
+                                     "End port # must be a positive integer.")
+                return
+            if self.project.get_port(end_pid) is not None:
+                messagebox.showerror(
+                    "Add segment",
+                    f"Port {end_pid} already exists. Choose a free number "
+                    f"(or leave blank for auto).")
+                return
         G = self.project.globals   # so users can type global-variable names
 
         # Width — validate that it evaluates NOW; store the raw expression
@@ -3475,11 +3516,18 @@ class WaveguideApp:
                 return
             params[key] = _store_param(txt, v)
 
-        seg = self.project.add_segment(
-            kind, start_pid, self._selected_layer_idx(), params)
+        try:
+            seg = self.project.add_segment(
+                kind, start_pid, self._selected_layer_idx(), params,
+                end_pid=end_pid)
+        except RuntimeError as e:
+            messagebox.showerror("Add segment", str(e))
+            return
         self.refresh_all()
-        # auto-chain: next segment starts at the new endpoint
+        # auto-chain: next segment starts at the new endpoint, and the
+        # end-port box reverts to auto so the chosen id isn't reused.
         self.start_pid_var.set(str(seg.end_pid))
+        self.end_pid_var.set("")
 
     def edit_segment(self):
         sel = self.seg_tree.selection()
