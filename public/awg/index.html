@@ -130,6 +130,33 @@
   </div>
 
   <div class="panel">
+    <h3>Layout (GDS export)</h3>
+    <div class="form-grid">
+      <label>Slab separation D_slab <span class="unit">(μm, 0 = auto)</span>
+        <input type="number" id="dslab" value="0" step="100" min="0" /></label>
+      <label>Min straight L_min <span class="unit">(μm)</span>
+        <input type="number" id="lmin" value="100" step="10" min="1" /></label>
+      <label>Min bend B_min <span class="unit">(μm)</span>
+        <input type="number" id="bmin" value="2000" step="100" min="50" /></label>
+      <label>Slab tilt angle <span class="unit">(deg)</span>
+        <input type="number" id="san" value="0" step="0.5" min="-15" max="15" /></label>
+      <label>Arc step <span class="unit">(deg)</span>
+        <input type="number" id="arcstep" value="1.0" step="0.25" min="0.1" max="5" /></label>
+    </div>
+    <div style="margin-top:1rem; display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+      <button type="button" id="dlGds"
+              style="padding:0.6rem 1.2rem; font-size:0.95rem; background:var(--accent); color:white; border:none; border-radius:8px; cursor:pointer;">
+        ⤓ Download GDS
+      </button>
+      <span id="gdsInfo" class="note" style="margin:0;"></span>
+    </div>
+    <p class="note" style="margin-top:0.6rem;">
+      Layers — 1: AWG array waveguides · 2: input port · 3: output ports · 10: slab star couplers.
+      Coordinates in μm (1 dbu = 1 nm). PATH width = WG width W with round end-caps (pathtype 2).
+    </p>
+  </div>
+
+  <div class="panel">
     <h3>Designed AWG parameters</h3>
     <div class="results">
       <div class="key">Waveguide effective index n_eff_a</div><div class="val" id="nEffA">—</div>
@@ -520,6 +547,350 @@
     });
     window.addEventListener('resize', compute);
     compute();
+
+    // ─── GDSII writer ─────────────────────────────────────────────
+    // Records: HEADER, BGNLIB, LIBNAME, UNITS, BGNSTR, STRNAME,
+    //          {BOUNDARY|PATH, LAYER, DATATYPE, [PATHTYPE, WIDTH,] XY, ENDEL}+, ENDSTR, ENDLIB.
+    // Data types: INT16=2, INT32=3, REAL64=5 (IBM 8-byte), ASCII=6, NO_DATA=0.
+    // UNITS encodes user_unit/db_unit (= 0.001 → 1 dbu = 1 nm = 0.001 μm) and db_unit_meters (1e-9).
+    function gdsConcat(parts) {
+      let total = 0;
+      for (const p of parts) total += p.length;
+      const out = new Uint8Array(total);
+      let off = 0;
+      for (const p of parts) { out.set(p, off); off += p.length; }
+      return out;
+    }
+    function gdsRecHeader(recType, dataType, payloadLen) {
+      const total = 4 + payloadLen;
+      const h = new Uint8Array(4);
+      h[0] = (total >> 8) & 0xFF;
+      h[1] = total & 0xFF;
+      h[2] = recType;
+      h[3] = dataType;
+      return h;
+    }
+    function gdsInt16(recType, vals) {
+      const payload = new Uint8Array(2 * vals.length);
+      for (let i = 0; i < vals.length; i++) {
+        const v = vals[i] & 0xFFFF;
+        payload[2*i]   = (v >> 8) & 0xFF;
+        payload[2*i+1] = v & 0xFF;
+      }
+      return gdsConcat([gdsRecHeader(recType, 2, payload.length), payload]);
+    }
+    function gdsInt32(recType, vals) {
+      const payload = new Uint8Array(4 * vals.length);
+      for (let i = 0; i < vals.length; i++) {
+        const v = vals[i] | 0;
+        payload[4*i  ] = (v >>> 24) & 0xFF;
+        payload[4*i+1] = (v >>> 16) & 0xFF;
+        payload[4*i+2] = (v >>>  8) & 0xFF;
+        payload[4*i+3] = v & 0xFF;
+      }
+      return gdsConcat([gdsRecHeader(recType, 3, payload.length), payload]);
+    }
+    function gdsAscii(recType, str) {
+      let s = str;
+      if (s.length % 2 !== 0) s += '\0';
+      const payload = new Uint8Array(s.length);
+      for (let i = 0; i < s.length; i++) payload[i] = s.charCodeAt(i) & 0xFF;
+      return gdsConcat([gdsRecHeader(recType, 6, payload.length), payload]);
+    }
+    function gdsNoData(recType) {
+      return gdsRecHeader(recType, 0, 0);
+    }
+    // IBM 8-byte hex floating point used by GDSII REAL64.
+    function gdsRealIBM(value) {
+      const out = new Uint8Array(8);
+      if (value === 0) return out;
+      let sign = 0;
+      if (value < 0) { sign = 1; value = -value; }
+      let exp = 0;
+      while (value >= 1)    { value /= 16; exp++; if (exp >  63) break; }
+      while (value < 1/16)  { value *= 16; exp--; if (exp < -64) break; }
+      out[0] = (sign << 7) | ((exp + 64) & 0x7F);
+      let m = value;
+      for (let i = 1; i < 8; i++) {
+        m *= 256;
+        const b = Math.floor(m);
+        out[i] = b;
+        m -= b;
+      }
+      return out;
+    }
+    function gdsReal64(recType, vals) {
+      const payload = new Uint8Array(8 * vals.length);
+      for (let i = 0; i < vals.length; i++) payload.set(gdsRealIBM(vals[i]), 8*i);
+      return gdsConcat([gdsRecHeader(recType, 5, payload.length), payload]);
+    }
+
+    function buildGDS(structName, elements) {
+      const t = new Date();
+      const tArr = [t.getFullYear() % 100, t.getMonth()+1, t.getDate(),
+                    t.getHours(), t.getMinutes(), t.getSeconds()];
+      const dateArr = tArr.concat(tArr);   // mod date + access date
+
+      const parts = [
+        gdsInt16(0x00, [600]),              // HEADER (version 6)
+        gdsInt16(0x01, dateArr),            // BGNLIB
+        gdsAscii(0x02, 'AWG'),              // LIBNAME
+        gdsReal64(0x03, [1e-3, 1e-9]),      // UNITS (1 dbu = 1 nm, user unit = 1 μm)
+        gdsInt16(0x05, dateArr),            // BGNSTR
+        gdsAscii(0x06, structName),         // STRNAME
+      ];
+
+      for (const el of elements) {
+        if (el.type === 'BOUNDARY') {
+          parts.push(gdsNoData(0x08));      // BOUNDARY
+          parts.push(gdsInt16(0x0D, [el.layer]));        // LAYER
+          parts.push(gdsInt16(0x0E, [el.datatype || 0])); // DATATYPE
+          const pts = el.pts.slice();
+          const f = pts[0], l = pts[pts.length-1];
+          if (f[0] !== l[0] || f[1] !== l[1]) pts.push([f[0], f[1]]);
+          const xy = [];
+          for (const [x, y] of pts) {
+            xy.push(Math.round(x * 1000));
+            xy.push(Math.round(y * 1000));
+          }
+          parts.push(gdsInt32(0x10, xy));   // XY
+          parts.push(gdsNoData(0x11));      // ENDEL
+        } else if (el.type === 'PATH') {
+          parts.push(gdsNoData(0x09));      // PATH
+          parts.push(gdsInt16(0x0D, [el.layer]));
+          parts.push(gdsInt16(0x0E, [el.datatype || 0]));
+          parts.push(gdsInt16(0x21, [2]));  // PATHTYPE 2 (round end-caps)
+          parts.push(gdsInt32(0x0F, [Math.round((el.width || 0) * 1000)])); // WIDTH
+          const xy = [];
+          for (const [x, y] of el.pts) {
+            xy.push(Math.round(x * 1000));
+            xy.push(Math.round(y * 1000));
+          }
+          parts.push(gdsInt32(0x10, xy));
+          parts.push(gdsNoData(0x11));
+        }
+      }
+
+      parts.push(gdsNoData(0x07));          // ENDSTR
+      parts.push(gdsNoData(0x04));          // ENDLIB
+      return gdsConcat(parts);
+    }
+
+    // ─── AWG layout geometry (ported from ETRI Cmd_Draw_Click) ───
+    function readLayout() {
+      const g = id => parseFloat(document.getElementById(id).value);
+      return {
+        dslab: g('dslab') || 0,
+        lmin:  g('lmin')  || 100,
+        bmin:  g('bmin')  || 2000,
+        san:   g('san')   || 0,
+        arcStepDeg: Math.max(0.1, g('arcstep') || 1.0),
+      };
+    }
+
+    function awgGeometry(p, d, lay) {
+      const FCL  = d.fl;                                        // focal length [μm]
+      const DA1  = 2 * Math.asin(0.5 * p.daw / FCL);            // AWG angle step
+      const DA2  = 2 * Math.asin(0.5 * p.dio / FCL);            // IO angle step
+      const SAN  = lay.san * Math.PI / 180;
+      const DSL  = lay.dslab > 0 ? lay.dslab : (2 * FCL + 2 * lay.bmin);
+      const SNM  = lay.lmin;
+      const BNM  = lay.bmin;
+      const WGW  = p.W;                                          // [μm]
+      const DPL  = d.dL;                                         // [μm]
+      const TL   = DSL + 2 * FCL;
+      const DP   = p.dio;
+      const na   = p.na;
+      const nc   = p.nch;
+      const STEP = lay.arcStepDeg * Math.PI / 180;
+
+      const QX = -0.5 * DSL, QY = 0;
+      const PX = FCL * Math.cos(SAN) + QX;
+      const PY = FCL * Math.sin(SAN) + QY;
+
+      const elements = [];
+
+      // Slab boundaries (Layer 10) — Rowland geometry: AWG arc + IO arc.
+      const halfSweep = 1.5 * 0.5 * (na - 1) * DA1;              // WSL=1.5 (default)
+      const nSlab = Math.max(20, Math.ceil(2*halfSweep / STEP) + 1);
+      for (let side = 0; side < 2; side++) {
+        const xs = side === 0 ? 1 : -1;
+        const qx = side === 0 ? QX : -QX;
+        const px = side === 0 ? PX : -PX;
+        const ptsAwg = [], ptsIo = [];
+        for (let k = 0; k < nSlab; k++) {
+          const a = SAN + halfSweep * (1 - 2*k/(nSlab-1));
+          ptsAwg.push([xs * FCL * Math.cos(a) + qx, FCL * Math.sin(a) + QY]);
+        }
+        for (let k = 0; k < nSlab; k++) {
+          const a = SAN - halfSweep * (1 - 2*k/(nSlab-1));
+          ptsIo.push([-xs * FCL * Math.cos(a) + px, -FCL * Math.sin(a) + PY]);
+        }
+        elements.push({type:'BOUNDARY', layer:10, pts: ptsAwg.concat(ptsIo.reverse())});
+      }
+
+      // AWG array waveguides (Layer 1) — single circular arc per waveguide,
+      // bulging UP above the chord. Each waveguide j is an arc from the input
+      // slab edge (AX[j], AY[j]) to its mirror on the output slab edge (-AX[j], AY[j])
+      // with arc length = path[j] = path_min + (j - 1)·ΔL (uniform increment).
+      // The arc radius R[j] and half-angle α[j] satisfy
+      //   2·R·sin(α) = chord = 2·|AX[j]|     (geometric)
+      //   2·R·α     = path[j]                 (length)
+      // → sin(α)/α = chord/path,  R = path/(2α).
+      // For paths only slightly longer than the chord the arc is nearly straight;
+      // for paths much longer the arc approaches a semicircle (α → π).
+      function solveAlpha(c) {
+        if (c >= 1) return 1e-6;
+        if (c <= 0) return Math.PI - 1e-6;
+        let lo = 1e-6, hi = Math.PI - 1e-6;
+        for (let i = 0; i < 60; i++) {
+          const m = 0.5*(lo + hi);
+          if (Math.sin(m)/m > c) lo = m; else hi = m;
+        }
+        return 0.5*(lo + hi);
+      }
+
+      const AN = new Array(na+1);
+      const AX = new Array(na+1), AY = new Array(na+1);
+      for (let j = 1; j <= na; j++) {
+        AN[j] = SAN + (0.5*(na+1) - j) * DA1;
+        AX[j] = FCL*Math.cos(AN[j]) + QX;
+        AY[j] = FCL*Math.sin(AN[j]) + QY;
+      }
+      const maxChord = 2 * Math.max(...AN.slice(1).map((_, k) => Math.abs(AX[k+1])));
+      const pathMin = Math.max(maxChord * 1.05, maxChord + 4*WGW);   // 5% margin over chord
+
+      // Path length increases linearly with j so adjacent waveguides differ by ΔL.
+      // For each waveguide: chord midpoint is (0, AY[j]), arc bulges UP (+y).
+      // Center y: cy = AY[j] − R·cos(α). This works for both short arcs (α < π/2,
+      // center below chord) and long arcs (α > π/2, center above chord).
+      // Traversal is CW by 2·α from P1 (left) to P2 (right) through the top of the
+      // circle at (0, cy + R).
+      for (let j = 1; j <= na; j++) {
+        const chord = 2 * Math.abs(AX[j]);
+        const path  = pathMin + (j - 1) * DPL;
+        if (chord >= path) continue;
+        const alpha = solveAlpha(chord / path);
+        const R     = path / (2 * alpha);
+        const cy    = AY[j] - R * Math.cos(alpha);
+        const aStart = Math.atan2(AY[j] - cy, AX[j]);
+        const sweep  = -2 * alpha;                       // CW so we pass through (0, cy+R)
+        const nArc   = Math.max(24, Math.ceil(2 * alpha / STEP));
+        const pts = [];
+        for (let k = 0; k <= nArc; k++) {
+          const a = aStart + sweep * k / nArc;
+          pts.push([R * Math.cos(a), cy + R * Math.sin(a)]);
+        }
+        elements.push({type:'PATH', layer:1, width: WGW, pts});
+      }
+
+      // Output ports (Layer 3): slab exit → straight → S-bend (radius BNM) → horizontal bus.
+      const AA = new Array(nc+1);
+      const FY = new Array(nc+2), EX = new Array(nc+2), EY = new Array(nc+2);
+      const cxa = new Array(nc+2), cya = new Array(nc+2);
+      const FX = new Array(nc+2), GX = new Array(nc+2), GY = new Array(nc+2);
+
+      for (let j = 1; j <= nc; j++) AA[j] = SAN - (0.5*(nc+1) - j) * DA2;
+      EX[1] = PX - (FCL+SNM) * Math.cos(AA[1]);
+      EY[1] = PY - (FCL+SNM) * Math.sin(AA[1]);
+      cxa[1] = EX[1] - BNM * Math.sin(AA[1]);
+      cya[1] = EY[1] + BNM * Math.cos(AA[1]);
+      FX[1] = cxa[1];
+      FY[1] = cya[1] - BNM;
+      GX[1] = -0.5 * TL;
+      GY[1] = FY[1];
+      for (let j = 2; j <= nc; j++) {
+        FY[j] = FY[1] - DP*(j-1);
+        EY[j] = FY[j] + BNM*(1 - Math.cos(AA[j]));
+        const SNJ = Math.abs(Math.sin(AA[j])) > 1e-12 ? (PY - EY[j])/Math.sin(AA[j]) : (FCL+SNM);
+        EX[j] = PX - SNJ * Math.cos(AA[j]);
+        cxa[j] = EX[j] - BNM * Math.sin(AA[j]);
+        cya[j] = EY[j] + BNM * Math.cos(AA[j]);
+        FX[j] = cxa[j];
+        GX[j] = -0.5 * TL;
+        GY[j] = FY[j];
+      }
+
+      for (let j = 1; j <= nc; j++) {
+        const aj = AA[j];
+        const DDX = PX - FCL * Math.cos(aj);
+        const DDY = PY - FCL * Math.sin(aj);
+        const pts = [];
+        pts.push([-DDX, DDY]);                                  // slab exit (output side mirrored)
+        pts.push([-EX[j], EY[j]]);                              // end of straight section
+        const nBend = Math.max(8, Math.ceil(Math.abs(aj) / STEP) + 1);
+        for (let k = 1; k <= nBend; k++) {
+          const a = aj * (nBend - k) / nBend;                    // sweep from a_j → 0
+          pts.push([-(cxa[j] + BNM*Math.sin(a)), cya[j] - BNM*Math.cos(a)]);
+        }
+        pts.push([-GX[j], GY[j]]);                              // horizontal bus to right edge
+        elements.push({type:'PATH', layer:3, width: WGW, pts});
+      }
+
+      // Input port (Layer 2). 1xN configuration: single waveguide on the centre axis,
+      // optional S-bend if the slab is tilted (SAN ≠ 0).
+      {
+        const FY_mid = nc >= 2 ? 0.5*(FY[1] + FY[nc]) : 0;
+        const EY_in  = FY_mid + BNM*(1 - Math.cos(SAN));
+        const SNJ_in = Math.abs(Math.sin(SAN)) > 1e-12 ? (PY - EY_in)/Math.sin(SAN) : (FCL+SNM);
+        const EX_in  = PX - SNJ_in * Math.cos(SAN);
+        const cx_in  = EX_in - BNM * Math.sin(SAN);
+        const cy_in  = EY_in + BNM * Math.cos(SAN);
+        const FX_in  = cx_in;
+        const FY_in  = cy_in - BNM;
+        const GX_in  = -0.5 * TL;
+        const DDX = PX - FCL * Math.cos(SAN);
+        const DDY = PY - FCL * Math.sin(SAN);
+        const pts = [];
+        pts.push([DDX, DDY]);
+        pts.push([EX_in, EY_in]);
+        if (Math.abs(SAN) > 1e-6) {
+          const nBend = Math.max(8, Math.ceil(Math.abs(SAN) / STEP) + 1);
+          for (let k = 1; k <= nBend; k++) {
+            const a = SAN * (nBend - k) / nBend;
+            pts.push([cx_in - BNM*Math.sin(a), cy_in - BNM*Math.cos(a)]);
+          }
+        } else {
+          pts.push([FX_in, FY_in]);
+        }
+        pts.push([GX_in, FY_in]);
+        elements.push({type:'PATH', layer:2, width: WGW, pts});
+      }
+
+      return elements;
+    }
+
+    function downloadGDS() {
+      const info = document.getElementById('gdsInfo');
+      const p = readParams();
+      const d = design(p);
+      if (!d) { info.textContent = 'Cannot generate GDS — design failed.'; return; }
+      const lay = readLayout();
+
+      let elements;
+      try {
+        elements = awgGeometry(p, d, lay);
+      } catch (e) {
+        info.textContent = 'Geometry error: ' + e.message;
+        return;
+      }
+
+      const data = buildGDS('AWG_TOP', elements);
+      const blob = new Blob([data], {type: 'application/octet-stream'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const stem = `awg_${p.nch}ch_${Math.round(p.dlchNm*1000)}pm_m${d.m}`;
+      a.download = stem + '.gds';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      info.textContent =
+        `Wrote ${elements.length} elements (${(data.length/1024).toFixed(1)} KB) → ${a.download}`;
+    }
+
+    document.getElementById('dlGds').addEventListener('click', downloadGDS);
   </script>
 </body>
 </html>
