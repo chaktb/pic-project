@@ -108,9 +108,9 @@
       <label>Array waveguides N_a
         <input type="number" id="na" value="30" step="2" min="4" max="200" /></label>
       <label>Array pitch d_aw <span class="unit">(μm)</span>
-        <input type="number" id="daw" value="15.0" step="0.5" min="2" /></label>
+        <input type="number" id="daw" value="10.0" step="0.5" min="2" /></label>
       <label>IO pitch d_io <span class="unit">(μm)</span>
-        <input type="number" id="dio" value="20.0" step="0.5" min="2" /></label>
+        <input type="number" id="dio" value="15.0" step="0.5" min="2" /></label>
       <label>Coupling profile
         <select id="profile">
           <option value="uniform">Uniform</option>
@@ -137,9 +137,9 @@
       <label>Min straight L_min <span class="unit">(μm)</span>
         <input type="number" id="lmin" value="100" step="10" min="1" /></label>
       <label>Min bend B_min <span class="unit">(μm)</span>
-        <input type="number" id="bmin" value="2000" step="100" min="50" /></label>
-      <label>Slab tilt angle <span class="unit">(deg)</span>
-        <input type="number" id="san" value="0" step="0.5" min="-15" max="15" /></label>
+        <input type="number" id="bmin" value="1000" step="100" min="50" /></label>
+      <label>Slab tilt SAN <span class="unit">(deg, −1 = auto)</span>
+        <input type="number" id="san" value="-1" step="0.5" min="-1" max="30" /></label>
       <label>Arc step <span class="unit">(deg)</span>
         <input type="number" id="arcstep" value="1.0" step="0.25" min="0.1" max="5" /></label>
     </div>
@@ -148,7 +148,17 @@
               style="padding:0.6rem 1.2rem; font-size:0.95rem; background:var(--accent); color:white; border:none; border-radius:8px; cursor:pointer;">
         ⤓ Download GDS
       </button>
+      <button type="button" id="dAdjust"
+              style="padding:0.6rem 1.0rem; font-size:0.92rem; background:transparent; color:var(--accent); border:1px solid var(--accent); border-radius:8px; cursor:pointer;"
+              title="Iteratively adjust D_slab until the minimum array bend radius matches B_min">
+        ⇆ D Adjust
+      </button>
       <span id="gdsInfo" class="note" style="margin:0;"></span>
+    </div>
+    <div class="results" style="margin-top:0.6rem;">
+      <div class="key">D_slab (effective)</div><div class="val" id="dslabEff">—</div>
+      <div class="key">Min bend radius (computed)</div><div class="val" id="bminC">—</div>
+      <div class="key">Min straight (computed)</div><div class="val" id="lminC">—</div>
     </div>
     <p class="note" style="margin-top:0.6rem;">
       Layers — 1: AWG array waveguides · 2: input port · 3: output ports · 10: slab star couplers.
@@ -265,24 +275,32 @@
       };
     }
 
+    // Ported from ETRI awg_calc.py — calc_fsr() then m_phase(m).
+    // Step 1 (calc_fsr): pragmatic f_l = n_eff·d_aw·d_io·N_ch / λ_c, then
+    // derive d_path from the dispersion relation and seed m. Step 2 (m_phase):
+    // round m to the nearest integer and recompute consistent d_path / f_l / FSR.
     function design(p) {
       const at = eim(p.lamC, p.W, p.H, p.dl);
       if (!at) return null;
-      const ng = groupIndex(p.lamC, p.W, p.H, p.dl) ?? at.nEffA;
+      const nE  = at.nEffA;                      // waveguide mode index
+      const nS  = at.nEffS;                      // slab mode index (height direction)
+      const ng  = groupIndex(p.lamC, p.W, p.H, p.dl) ?? nE;
+      const lam = p.lamC;
       const dlchUm = p.dlchNm * 1e-3;
-      // m: if user set 0, choose so FSR ≈ (N_ch + safety) · Δλ_ch
-      // Smit recommends FSR ≈ N_ch · Δλ_ch (no overlap of adjacent orders).
-      let m = p.mPref;
-      if (m <= 0) {
-        const fsrTarget = (p.nch + 2) * dlchUm;
-        m = Math.max(1, Math.round(p.lamC*p.lamC / (ng * fsrTarget * (p.lamC/at.nEffA))));
-        // Equivalent to m = round(λ_c · n_eff_a / (n_g · FSR_target))
-      }
-      const dL = m * p.lamC / at.nEffA;                       // μm
-      const fsrUm = p.lamC*p.lamC / (ng * dL);                // μm
-      const fl = (at.nEffS * p.daw * p.dio * at.nEffA) / (m * ng * dlchUm); // μm
+
+      // ETRI calc_fsr() — initial f_l, then d_path, then m seed.
+      let fl   = nE * p.daw * p.dio * p.nch / lam;            // μm (calc_fsr)
+      let dL   = Math.abs(p.daw * (p.dio / fl) * lam * nS
+                          / (dlchUm * ng));
+      let m    = p.mPref > 0 ? p.mPref : Math.round(dL * nE / lam);
+      if (m < 1) m = 1;
+
+      // ETRI m_phase(m) — recompute d_path / f_l / FSR consistent with integer m.
+      dL = m * lam / nE;
+      fl = Math.abs((p.dio / dlchUm) * (nS * p.daw * lam) / (ng * dL));
+      const fsrUm = (lam * nE) / (m * ng);
       const sweepRad = (p.nch - 1) * p.dio / fl;
-      return { nEffA: at.nEffA, nEffS: at.nEffS, nG: ng, m, dL, fsrUm, fl, sweepRad };
+      return { nEffA: nE, nEffS: nS, nG: ng, m, dL, fsrUm, fl, sweepRad };
     }
 
     function couplingAmp(p) {
@@ -301,17 +319,21 @@
       return { A, Asum };
     }
 
-    // Transmission spectra of all N_ch ports
+    // Ported from ETRI simulate_spectral_response() — phase formula uses
+    //   phase_k(λ) = (2π/λ) · ( k·d_path·n_wgd + n_slab·d_aw·(α_i+α_o)·(k−0.5−N_a/2) )
+    // with α_i = 0 for the 1×N input, α_o = angle_d·(port − (N_ch+1)/2).
     function spectrum(p, d) {
       const half = 0.5 * p.span * d.fsrUm;
       const wlA = p.lamC - half, wlB = p.lamC + half;
       const { A, Asum } = couplingAmp(p);
       const ports = [];
-      for (let i = 1; i <= p.nch; i++) {
-        ports.push({ idx: i, wl: [], T: [] });
-      }
-      const c = 0.5 * (p.na + 1);
+      for (let i = 1; i <= p.nch; i++) ports.push({ idx: i, wl: [], T: [] });
+
+      const angle_d = p.dio / d.fl;
+      const ang_i = 0;                              // 1×N input on the slab axis
       const cch = 0.5 * (p.nch + 1);
+      const k0  = 0.5 * (p.na + 1);                 // index centre offset
+
       for (let n = 0; n < p.N; n++) {
         const wl = wlA + (wlB - wlA) * n / (p.N - 1);
         const at = eim(wl, p.W, p.H, p.dl);
@@ -319,15 +341,15 @@
           for (const port of ports) { port.wl.push(wl); port.T.push(NaN); }
           continue;
         }
-        const beta = 2*Math.PI*at.nEffA/wl;
         for (const port of ports) {
-          const theta_i = (port.idx - cch) * p.dio / d.fl;
-          const dphi = beta*d.dL + 2*Math.PI*at.nEffS*p.daw*theta_i/wl;
+          const ang_o = angle_d * (port.idx - cch);
           let re = 0, im = 0;
           for (let k = 1; k <= p.na; k++) {
-            const phi = (k - c) * dphi;
-            re += A[k] * Math.cos(phi);
-            im += A[k] * Math.sin(phi);
+            const phase = (2*Math.PI / wl) *
+                          (k * d.dL * at.nEffA
+                           + at.nEffS * p.daw * (ang_i + ang_o) * (k - k0));
+            re += A[k] * Math.cos(phase);
+            im += A[k] * Math.sin(phase);
           }
           const T = (re*re + im*im) / (Asum*Asum);
           port.wl.push(wl); port.T.push(T);
@@ -688,11 +710,17 @@
       };
     }
 
+    let __awgLayoutMetrics = null;
     function awgGeometry(p, d, lay) {
       const FCL  = d.fl;                                        // focal length [μm]
       const DA1  = 2 * Math.asin(0.5 * p.daw / FCL);            // AWG angle step
       const DA2  = 2 * Math.asin(0.5 * p.dio / FCL);            // IO angle step
-      const SAN  = lay.san * Math.PI / 180;
+      // Auto-tilt the slab so the entire array fan lies above the x-axis (and the
+      // IO bus comes out below it) — matches the ETRI 1x4 layout aesthetic.
+      // lay.san < 0 (sentinel) ⇒ auto = 0.5·(na−1)·DA1.
+      const SAN  = lay.san < 0
+        ? 0.5 * (p.na - 1) * DA1
+        : lay.san * Math.PI / 180;
       const DSL  = lay.dslab > 0 ? lay.dslab : (2 * FCL + 2 * lay.bmin);
       const SNM  = lay.lmin;
       const BNM  = lay.bmin;
@@ -729,16 +757,15 @@
         elements.push({type:'BOUNDARY', layer:10, pts: ptsAwg.concat(ptsIo.reverse())});
       }
 
-      // AWG array waveguides (Layer 1) — single circular arc per waveguide,
-      // bulging UP above the chord. Each waveguide j is an arc from the input
-      // slab edge (AX[j], AY[j]) to its mirror on the output slab edge (-AX[j], AY[j])
-      // with arc length = path[j] = path_min + (j - 1)·ΔL (uniform increment).
-      // The arc radius R[j] and half-angle α[j] satisfy
-      //   2·R·sin(α) = chord = 2·|AX[j]|     (geometric)
-      //   2·R·α     = path[j]                 (length)
-      // → sin(α)/α = chord/path,  R = path/(2α).
-      // For paths only slightly longer than the chord the arc is nearly straight;
-      // for paths much longer the arc approaches a semicircle (α → π).
+      // AWG array waveguides (Layer 1).
+      // Strategy: each waveguide has a SNM straight section from the slab edge at
+      // angle AN[j], then a single arc that joins to the symmetric output side
+      // (-BX, BY) → (-AX, AY). The arc length grows by ΔL between adjacent
+      // waveguides, which is what the AWG operation requires. ETRI's literal
+      // formula (calc_layout_vars) is numerically unstable for narrow angular
+      // spreads (it solves sin(AN)−AN·cos(AN) ≈ AN³/3 which blows up); we instead
+      // solve sin(α)/α = chord/path for the arc half-angle α, which is well
+      // conditioned everywhere. The slab-side geometry is exactly ETRI's.
       function solveAlpha(c) {
         if (c >= 1) return 1e-6;
         if (c <= 0) return Math.PI - 1e-6;
@@ -749,40 +776,46 @@
         }
         return 0.5*(lo + hi);
       }
-
       const AN = new Array(na+1);
       const AX = new Array(na+1), AY = new Array(na+1);
+      const BX = new Array(na+1), BY = new Array(na+1);
       for (let j = 1; j <= na; j++) {
         AN[j] = SAN + (0.5*(na+1) - j) * DA1;
-        AX[j] = FCL*Math.cos(AN[j]) + QX;
-        AY[j] = FCL*Math.sin(AN[j]) + QY;
+        AX[j] = FCL * Math.cos(AN[j]) + QX;
+        AY[j] = FCL * Math.sin(AN[j]) + QY;
+        BX[j] = (FCL + SNM) * Math.cos(AN[j]) + QX;
+        BY[j] = (FCL + SNM) * Math.sin(AN[j]) + QY;
       }
-      const maxChord = 2 * Math.max(...AN.slice(1).map((_, k) => Math.abs(AX[k+1])));
-      const pathMin = Math.max(maxChord * 1.05, maxChord + 4*WGW);   // 5% margin over chord
+      // Use BX (post-straight-section endpoint) as the arc endpoint.
+      const maxChord = 2 * Math.max(...AN.slice(1).map((_, k) => Math.abs(BX[k+1])));
+      const pathMin = Math.max(maxChord * 1.05, maxChord + 4*WGW);
 
-      // Path length increases linearly with j so adjacent waveguides differ by ΔL.
-      // For each waveguide: chord midpoint is (0, AY[j]), arc bulges UP (+y).
-      // Center y: cy = AY[j] − R·cos(α). This works for both short arcs (α < π/2,
-      // center below chord) and long arcs (α > π/2, center above chord).
-      // Traversal is CW by 2·α from P1 (left) to P2 (right) through the top of the
-      // circle at (0, cy + R).
+      let R_min = Infinity, S_min = SNM;
       for (let j = 1; j <= na; j++) {
-        const chord = 2 * Math.abs(AX[j]);
+        const chord = 2 * Math.abs(BX[j]);
         const path  = pathMin + (j - 1) * DPL;
-        if (chord >= path) continue;
-        const alpha = solveAlpha(chord / path);
-        const R     = path / (2 * alpha);
-        const cy    = AY[j] - R * Math.cos(alpha);
-        const aStart = Math.atan2(AY[j] - cy, AX[j]);
-        const sweep  = -2 * alpha;                       // CW so we pass through (0, cy+R)
-        const nArc   = Math.max(24, Math.ceil(2 * alpha / STEP));
-        const pts = [];
-        for (let k = 0; k <= nArc; k++) {
-          const a = aStart + sweep * k / nArc;
-          pts.push([R * Math.cos(a), cy + R * Math.sin(a)]);
+        let alpha = 1e-6, R = path / 2;
+        if (chord < path) {
+          alpha = solveAlpha(chord / path);
+          R = path / (2 * alpha);
         }
+        if (R < R_min) R_min = R;
+        const cy = BY[j] - R * Math.cos(alpha);
+        const aStart = Math.atan2(BY[j] - cy, BX[j]);
+        const sweep = -2 * alpha;                  // CW through (0, cy + R)
+        const nArc = Math.max(24, Math.ceil(2 * alpha / STEP));
+        const pts = [];
+        pts.push([AX[j], AY[j]]);                  // slab edge
+        pts.push([BX[j], BY[j]]);                  // end of input straight
+        for (let k = 1; k <= nArc; k++) {
+          const a = aStart + sweep * k / nArc;
+          pts.push([R*Math.cos(a), cy + R*Math.sin(a)]);
+        }
+        pts.push([-BX[j], BY[j]]);                 // start of output straight
+        pts.push([-AX[j], AY[j]]);                 // mirrored slab edge
         elements.push({type:'PATH', layer:1, width: WGW, pts});
       }
+      __awgLayoutMetrics = { R_min, S_min };
 
       // Output ports (Layer 3): slab exit → straight → S-bend (radius BNM) → horizontal bus.
       const AA = new Array(nc+1);
@@ -891,6 +924,64 @@
     }
 
     document.getElementById('dlGds').addEventListener('click', downloadGDS);
+
+    // Recompute geometry metrics (R_min, S_min) from current params + layout,
+    // showing them on the results panel without producing a download.
+    function refreshLayoutMetrics() {
+      const p = readParams();
+      const d = design(p);
+      const dslabEl = document.getElementById('dslabEff');
+      const bminEl  = document.getElementById('bminC');
+      const lminEl  = document.getElementById('lminC');
+      if (!d) { [dslabEl, bminEl, lminEl].forEach(el => el.textContent='—'); return; }
+      const lay = readLayout();
+      try {
+        awgGeometry(p, d, lay);    // populates __awgLayoutMetrics as a side-effect
+      } catch (e) {
+        [dslabEl, bminEl, lminEl].forEach(el => el.textContent = '—');
+        return;
+      }
+      const DSL = lay.dslab > 0 ? lay.dslab : (2 * d.fl + 2 * lay.bmin);
+      dslabEl.textContent = DSL.toFixed(2) + ' μm';
+      if (__awgLayoutMetrics) {
+        bminEl.textContent = __awgLayoutMetrics.R_min.toFixed(2) + ' μm';
+        lminEl.textContent = __awgLayoutMetrics.S_min.toFixed(2) + ' μm';
+      }
+    }
+    ['dslab','lmin','bmin','san','arcstep'].forEach(id => {
+      document.getElementById(id).addEventListener('input', refreshLayoutMetrics);
+    });
+    // Update metrics whenever the design recomputes.
+    const _origCompute = compute;
+    compute = function() { _origCompute(); refreshLayoutMetrics(); };
+    refreshLayoutMetrics();
+
+    // D Adjust — bisection-style sweep of D_slab until min |R| matches B_min.
+    // Mirrors the iterative loop in ETRI Frm_Plot._do_draw_and_adjust().
+    function dAdjust() {
+      const p = readParams();
+      const d = design(p);
+      if (!d) return;
+      const dslabIn = document.getElementById('dslab');
+      const lay = readLayout();
+      let DSL = lay.dslab > 0 ? lay.dslab : (2 * d.fl + 2 * lay.bmin);
+      let delta = Math.max(100, 0.05 * DSL);
+      const target = lay.bmin;
+      for (let iter = 0; iter < 80; iter++) {
+        // Set DSL and recompute geometry to read R_min.
+        dslabIn.value = DSL.toFixed(2);
+        const lay2 = readLayout();
+        try { awgGeometry(p, d, lay2); } catch (e) { break; }
+        if (!__awgLayoutMetrics) break;
+        const Rabs = Math.abs(__awgLayoutMetrics.R_min);
+        if (Math.abs(Rabs - target) < 0.5 || delta < 0.5) break;
+        if (Rabs > target) DSL -= delta; else DSL += delta;
+        delta *= 0.66;
+        if (DSL < 2*d.fl + 10) { DSL = 2*d.fl + 10; delta *= 0.5; }
+      }
+      compute();
+    }
+    document.getElementById('dAdjust').addEventListener('click', dAdjust);
   </script>
 </body>
 </html>
