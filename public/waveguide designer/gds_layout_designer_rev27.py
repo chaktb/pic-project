@@ -1169,6 +1169,12 @@ class Project:
         self._next_pid = 1
         self._next_sid = 1
 
+        # Seed one default base port at the origin so a brand-new project
+        # has a valid start port (#1) for the very first "Add Segment".
+        # NOTE: Project.from_dict() replaces self.ports wholesale, so this
+        # seed never duplicates ports when loading a saved project.
+        self.add_base_port(0.0, 0.0, 0.0, self.layers[0].width, 0, label="in")
+
         # Global variables — set by the user in the UI, auto-injected
         # into the script namespace on every run.
         self.globals: Dict[str, object] = {}
