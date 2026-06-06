@@ -5,33 +5,92 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Refractive Index of Fused Silica</title>
   <style>
-    :root { color-scheme: light dark; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      max-width: 880px;
-      margin: 2rem auto;
-      padding: 0 1rem;
-      line-height: 1.6;
+    :root {
+      color-scheme: light dark;
+      --bg: #ffffff;
+      --fg: #1a1a1a;
+      --muted: #666;
+      --card-bg: #f7f7f9;
+      --card-border: #e1e1e6;
+      --accent: #3b5bdb;
+      --input-bg: #ffffff;
+      --grid: #d9d9e0;
+      --curve: #3b5bdb;
     }
-    h1 { margin-bottom: 0.25rem; }
-    .subtitle { color: #666; margin-top: 0; }
-    img { width: 100%; height: auto; border: 1px solid #ddd; border-radius: 8px; }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0e0e10;
+        --fg: #e8e8ea;
+        --muted: #9a9aa3;
+        --card-bg: #1a1a1e;
+        --card-border: #2a2a30;
+        --accent: #748ffc;
+        --input-bg: #14141a;
+        --grid: #2f2f37;
+        --curve: #748ffc;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0 auto;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.6;
+      max-width: 880px;
+      padding: 1.5rem;
+    }
+    .back { display: inline-block; margin-bottom: 1rem; color: var(--muted); text-decoration: none; }
+    .back:hover { text-decoration: underline; color: var(--accent); }
+    h1 { margin-bottom: 0.25rem; letter-spacing: -0.02em; }
+    .subtitle { color: var(--muted); margin-top: 0; }
+    .panel {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin: 1.5rem 0;
+    }
+    .form-row { display: flex; align-items: flex-end; gap: 1.5rem; flex-wrap: wrap; }
+    label { display: flex; flex-direction: column; font-size: 0.9rem; color: var(--muted); }
+    label span.unit { font-size: 0.8rem; }
+    input[type=number] {
+      margin-top: 0.35rem;
+      padding: 0.55rem 0.75rem;
+      font-size: 1rem;
+      background: var(--input-bg);
+      color: var(--fg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      width: 160px;
+      font-variant-numeric: tabular-nums;
+    }
+    input[type=number]:focus { outline: none; border-color: var(--accent); }
+    .result { display: flex; flex-direction: column; }
+    .result .key { color: var(--muted); font-size: 0.9rem; }
+    .result .val { font-weight: 600; font-size: 1.6rem; color: var(--accent); font-variant-numeric: tabular-nums; }
+    .status { color: var(--muted); font-size: 0.85rem; margin-top: 0.75rem; }
+    .status.warn { color: #e8590c; }
+    svg { width: 100%; height: auto; display: block; }
+    svg text { fill: var(--muted); font-size: 12px; }
+    .formula {
+      background: var(--card-bg);
+      border-left: 3px solid var(--accent);
+      padding: 0.75rem 1rem;
+      margin: 1rem 0;
+      font-size: 0.9rem;
+    }
     pre {
-      background: #f4f4f4;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
       padding: 1rem;
       border-radius: 8px;
       overflow-x: auto;
-      font-size: 0.9rem;
+      font-size: 0.85rem;
     }
-    @media (prefers-color-scheme: dark) {
-      pre { background: #1e1e1e; color: #e6e6e6; }
-      img { border-color: #333; }
-    }
-    footer { margin-top: 2rem; color: #888; font-size: 0.85rem; }
-    .back { display: inline-block; margin-bottom: 1rem; color: #555; text-decoration: none; }
-    .back:hover { text-decoration: underline; }
-    .links a { display: inline-block; margin-right: 1rem; color: #3b5bdb; text-decoration: none; font-size: 0.9rem; }
+    .links a { display: inline-block; margin-right: 1rem; color: var(--accent); text-decoration: none; font-size: 0.9rem; }
     .links a:hover { text-decoration: underline; }
+    footer { margin-top: 2rem; color: var(--muted); font-size: 0.85rem; text-align: center; }
   </style>
 </head>
 <body>
@@ -39,14 +98,31 @@
   <h1>Refractive Index of Fused Silica</h1>
   <p class="subtitle">Sellmeier equation (Malitson 1965), λ = 0.25 – 2.5 μm</p>
 
-  <img src="../n_silica.png" alt="Refractive index of fused silica vs wavelength" />
+  <div class="panel">
+    <div class="form-row">
+      <label>
+        Wavelength λ <span class="unit">(μm)</span>
+        <input type="number" id="wl" value="1.55" step="0.01" min="0.21" max="6.7" />
+      </label>
+      <div class="result">
+        <div class="key">Refractive index n</div>
+        <div class="val" id="nVal">—</div>
+      </div>
+    </div>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div class="panel">
+    <svg id="chart" viewBox="0 0 820 380" role="img" aria-label="Refractive index of fused silica vs wavelength"></svg>
+  </div>
 
   <h2>Sellmeier Equation</h2>
-  <pre>n²(λ) = 1 + Σ Bᵢ·λ² / (λ² − Cᵢ)
-
-B₁ = 0.6961663,  C₁ = 0.0684043²
-B₂ = 0.4079426,  C₂ = 0.1162414²
-B₃ = 0.8974794,  C₃ = 9.896161²</pre>
+  <div class="formula">
+    n²(λ) = 1 + Σᵢ Bᵢ·λ² / (λ² − Cᵢ)<br />
+    B₁ = 0.6961663, C₁ = 0.0684043² &nbsp;·&nbsp;
+    B₂ = 0.4079426, C₂ = 0.1162414² &nbsp;·&nbsp;
+    B₃ = 0.8974794, C₃ = 9.896161²
+  </div>
 
   <h2>Reference implementations</h2>
   <p class="links">
@@ -60,10 +136,132 @@ python n_silica.py 1.55          # lambda = 1.5500 um   n = 1.444024
 # Java
 javac NSilica.java && java NSilica 1.55
 
-# Tkinter GUI: enter wavelength, read refractive index
+# Tkinter GUI: enter wavelength, marker moves on the plot
 python n_silica_gui.py</pre>
 
-  <footer>Plot generated by <code>n_silica.py</code>. Sellmeier coefficients match the
-  Python, Java, and GUI implementations in the repo.</footer>
+  <footer>Interactive Sellmeier plot — coefficients match the Python, Java, and GUI implementations in the repo.</footer>
+
+  <script>
+    const NS = "http://www.w3.org/2000/svg";
+    const WL_MIN = 0.25, WL_MAX = 2.5;      // plotted domain
+    const VALID_MIN = 0.21, VALID_MAX = 6.7; // Sellmeier validity
+
+    function nSilica(wl) {
+      const B1 = 0.6961663, B2 = 0.4079426, B3 = 0.8974794;
+      const C1 = 0.0684043 ** 2, C2 = 0.1162414 ** 2, C3 = 9.896161 ** 2;
+      const l2 = wl * wl;
+      return Math.sqrt(1 + B1*l2/(l2-C1) + B2*l2/(l2-C2) + B3*l2/(l2-C3));
+    }
+
+    // chart geometry
+    const X0 = 56, X1 = 800, Y0 = 24, Y1 = 332;  // plot rectangle
+    const svg = document.getElementById('chart');
+
+    // sample curve + y-domain
+    const N = 240;
+    const pts = [];
+    let yMin = Infinity, yMax = -Infinity;
+    for (let i = 0; i <= N; i++) {
+      const wl = WL_MIN + (WL_MAX - WL_MIN) * i / N;
+      const n = nSilica(wl);
+      pts.push([wl, n]);
+      if (n < yMin) yMin = n;
+      if (n > yMax) yMax = n;
+    }
+    const pad = (yMax - yMin) * 0.08;
+    yMin -= pad; yMax += pad;
+
+    const xPx = (wl) => X0 + (wl - WL_MIN) / (WL_MAX - WL_MIN) * (X1 - X0);
+    const yPx = (n)  => Y1 - (n - yMin) / (yMax - yMin) * (Y1 - Y0);
+
+    function el(tag, attrs, text) {
+      const e = document.createElementNS(NS, tag);
+      for (const k in attrs) e.setAttribute(k, attrs[k]);
+      if (text != null) e.textContent = text;
+      return e;
+    }
+
+    // --- static layer: grid, axes, ticks, curve ---
+    const xticks = [0.25, 0.5, 1.0, 1.5, 2.0, 2.5];
+    xticks.forEach(t => {
+      const x = xPx(t);
+      svg.appendChild(el('line', { x1: x, y1: Y0, x2: x, y2: Y1, stroke: 'var(--grid)', 'stroke-width': 1 }));
+      svg.appendChild(el('text', { x: x, y: Y1 + 18, 'text-anchor': 'middle' }, t.toFixed(2)));
+    });
+    for (let i = 0; i <= 4; i++) {
+      const n = yMin + (yMax - yMin) * i / 4;
+      const y = yPx(n);
+      svg.appendChild(el('line', { x1: X0, y1: y, x2: X1, y2: y, stroke: 'var(--grid)', 'stroke-width': 1 }));
+      svg.appendChild(el('text', { x: X0 - 8, y: y + 4, 'text-anchor': 'end' }, n.toFixed(3)));
+    }
+    // axis labels
+    svg.appendChild(el('text', { x: (X0 + X1) / 2, y: Y1 + 36, 'text-anchor': 'middle' }, 'Wavelength λ (μm)'));
+    svg.appendChild(el('text', { x: 16, y: (Y0 + Y1) / 2, 'text-anchor': 'middle',
+      transform: `rotate(-90 16 ${(Y0 + Y1) / 2})` }, 'Refractive index n'));
+
+    // curve
+    let d = '';
+    pts.forEach(([wl, n], i) => { d += (i ? 'L' : 'M') + xPx(wl).toFixed(2) + ' ' + yPx(n).toFixed(2) + ' '; });
+    svg.appendChild(el('path', { d, fill: 'none', stroke: 'var(--curve)', 'stroke-width': 2 }));
+
+    // --- dynamic marker layer ---
+    const guideX = el('line', { stroke: 'var(--accent)', 'stroke-width': 1, 'stroke-dasharray': '4 3' });
+    const guideY = el('line', { stroke: 'var(--accent)', 'stroke-width': 1, 'stroke-dasharray': '4 3' });
+    const dot = el('circle', { r: 5, fill: 'var(--accent)', stroke: 'var(--bg)', 'stroke-width': 2 });
+    const tagBg = el('rect', { rx: 4, fill: 'var(--accent)' });
+    const tag = el('text', { fill: '#fff', 'font-weight': 600, 'text-anchor': 'middle' });
+    [guideX, guideY, dot, tagBg, tag].forEach(e => svg.appendChild(e));
+
+    function update() {
+      const raw = parseFloat(document.getElementById('wl').value);
+      const nValEl = document.getElementById('nVal');
+      const statusEl = document.getElementById('status');
+      const markVisible = (v) => [guideX, guideY, dot, tagBg, tag].forEach(e => e.setAttribute('opacity', v));
+
+      if (!Number.isFinite(raw)) {
+        nValEl.textContent = '—';
+        statusEl.textContent = 'Enter a wavelength.';
+        statusEl.className = 'status';
+        markVisible(0);
+        return;
+      }
+
+      const n = nSilica(raw);
+      nValEl.textContent = n.toFixed(6);
+
+      if (raw < VALID_MIN || raw > VALID_MAX) {
+        statusEl.textContent = `⚠ Outside Sellmeier validity (${VALID_MIN} – ${VALID_MAX} μm)`;
+        statusEl.className = 'status warn';
+      } else if (raw < WL_MIN || raw > WL_MAX) {
+        statusEl.textContent = `n shown; marker pinned to plotted range ${WL_MIN} – ${WL_MAX} μm`;
+        statusEl.className = 'status';
+      } else {
+        statusEl.textContent = `λ = ${raw} μm   →   n = ${n.toFixed(6)}`;
+        statusEl.className = 'status';
+      }
+
+      // marker clamped to plotted domain
+      const wlClamped = Math.min(WL_MAX, Math.max(WL_MIN, raw));
+      const px = xPx(wlClamped), py = yPx(nSilica(wlClamped));
+      markVisible(1);
+      guideX.setAttribute('x1', px); guideX.setAttribute('y1', py);
+      guideX.setAttribute('x2', px); guideX.setAttribute('y2', Y1);
+      guideY.setAttribute('x1', X0); guideY.setAttribute('y1', py);
+      guideY.setAttribute('x2', px); guideY.setAttribute('y2', py);
+      dot.setAttribute('cx', px); dot.setAttribute('cy', py);
+
+      const label = `λ=${wlClamped.toFixed(2)}, n=${nSilica(wlClamped).toFixed(4)}`;
+      const tx = Math.min(Math.max(px, X0 + 60), X1 - 60);
+      const ty = py - 14 < Y0 + 14 ? py + 24 : py - 14;
+      tag.textContent = label;
+      tag.setAttribute('x', tx); tag.setAttribute('y', ty);
+      const w = label.length * 7 + 14;
+      tagBg.setAttribute('x', tx - w / 2); tagBg.setAttribute('y', ty - 14);
+      tagBg.setAttribute('width', w); tagBg.setAttribute('height', 19);
+    }
+
+    document.getElementById('wl').addEventListener('input', update);
+    update();
+  </script>
 </body>
 </html>

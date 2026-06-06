@@ -1,48 +1,79 @@
-"""Tkinter GUI: enter a wavelength (um) and read the fused-silica refractive index.
+"""Tkinter GUI: enter a wavelength (um) and read the fused-silica refractive index,
+with the point marked on a live Sellmeier plot.
 
 Uses the Sellmeier equation (Malitson 1965) from n_silica.py.
 
+Requires: matplotlib (for the embedded graph).
 Run: python n_silica_gui.py
 """
 
 import tkinter as tk
 from tkinter import ttk
 
+import matplotlib
+matplotlib.use("TkAgg")
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+
 from n_silica import n_silica
 
-VALID_MIN, VALID_MAX = 0.21, 6.7
+VALID_MIN, VALID_MAX = 0.21, 6.7   # Sellmeier validity
+PLOT_MIN, PLOT_MAX = 0.25, 2.5     # plotted range
 
 
 def main():
     root = tk.Tk()
     root.title("Refractive Index of Fused Silica")
-    root.resizable(False, False)
 
-    frame = ttk.Frame(root, padding=16)
+    frame = ttk.Frame(root, padding=12)
     frame.grid(sticky="nsew")
 
-    ttk.Label(frame, text="Sellmeier equation (Malitson 1965)",
-              font=("TkDefaultFont", 10, "bold")).grid(
-        row=0, column=0, columnspan=3, sticky="w", pady=(0, 12))
-
-    ttk.Label(frame, text="Wavelength λ").grid(row=1, column=0, sticky="w")
+    # --- input row ---
+    ttk.Label(frame, text="Wavelength λ").grid(row=0, column=0, sticky="w")
     wl_var = tk.StringVar(value="1.55")
     entry = ttk.Entry(frame, textvariable=wl_var, width=12, justify="right")
-    entry.grid(row=1, column=1, padx=6)
-    ttk.Label(frame, text="μm").grid(row=1, column=2, sticky="w")
+    entry.grid(row=0, column=1, padx=6)
+    ttk.Label(frame, text="μm").grid(row=0, column=2, sticky="w")
 
-    ttk.Separator(frame, orient="horizontal").grid(
-        row=2, column=0, columnspan=3, sticky="ew", pady=12)
-
-    ttk.Label(frame, text="Refractive index n").grid(row=3, column=0, sticky="w")
+    ttk.Label(frame, text="n =").grid(row=0, column=3, padx=(18, 4), sticky="e")
     result_var = tk.StringVar(value="—")
     ttk.Label(frame, textvariable=result_var,
-              font=("TkDefaultFont", 14, "bold")).grid(
-        row=3, column=1, columnspan=2, sticky="e")
+              font=("TkDefaultFont", 14, "bold")).grid(row=0, column=4, sticky="w")
 
     status_var = tk.StringVar(value=f"Valid range: {VALID_MIN} – {VALID_MAX} μm")
-    status = ttk.Label(frame, textvariable=status_var, foreground="#888")
-    status.grid(row=4, column=0, columnspan=3, sticky="w", pady=(12, 0))
+    ttk.Label(frame, textvariable=status_var, foreground="#888").grid(
+        row=1, column=0, columnspan=5, sticky="w", pady=(6, 10))
+
+    # --- plot ---
+    fig = Figure(figsize=(6.4, 3.8), dpi=100)
+    ax = fig.add_subplot(111)
+
+    wls = [PLOT_MIN + (PLOT_MAX - PLOT_MIN) * i / 400 for i in range(401)]
+    ns = [n_silica(w) for w in wls]
+    ax.plot(wls, ns, color="tab:blue", linewidth=2)
+    ax.set_xlabel("Wavelength λ (μm)")
+    ax.set_ylabel("Refractive index n")
+    ax.set_title("Refractive Index of Fused Silica (Sellmeier)")
+    ax.grid(True, linestyle="--", alpha=0.6)
+    ax.set_xlim(PLOT_MIN, PLOT_MAX)
+
+    marker, = ax.plot([], [], "o", color="tab:red", markersize=8, zorder=5)
+    guide_v = ax.axvline(x=0, color="tab:red", linestyle=":", linewidth=1, visible=False)
+    guide_h = ax.axhline(y=0, color="tab:red", linestyle=":", linewidth=1, visible=False)
+    annot = ax.annotate("", xy=(0, 0), xytext=(8, 8), textcoords="offset points",
+                        fontsize=9, color="white",
+                        bbox=dict(boxstyle="round,pad=0.3", fc="tab:red", ec="none"),
+                        visible=False)
+    fig.tight_layout()
+
+    canvas = FigureCanvasTkAgg(fig, master=frame)
+    canvas.get_tk_widget().grid(row=2, column=0, columnspan=5, sticky="nsew")
+
+    def set_marker_visible(v):
+        marker.set_visible(v)
+        guide_v.set_visible(v)
+        guide_h.set_visible(v)
+        annot.set_visible(v)
 
     def compute(*_):
         text = wl_var.get().strip()
@@ -52,12 +83,29 @@ def main():
             result_var.set("—")
             status_var.set("Enter a number." if text else
                            f"Valid range: {VALID_MIN} – {VALID_MAX} μm")
+            set_marker_visible(False)
+            canvas.draw_idle()
             return
-        result_var.set(f"{float(n_silica(wl)):.6f}")
+
+        n = n_silica(wl)
+        result_var.set(f"{n:.6f}")
+
         if wl < VALID_MIN or wl > VALID_MAX:
-            status_var.set(f"⚠ Outside valid range ({VALID_MIN} – {VALID_MAX} μm)")
+            status_var.set(f"⚠ Outside Sellmeier validity ({VALID_MIN} – {VALID_MAX} μm)")
+        elif wl < PLOT_MIN or wl > PLOT_MAX:
+            status_var.set(f"n shown; marker pinned to plotted range {PLOT_MIN} – {PLOT_MAX} μm")
         else:
-            status_var.set(f"Valid range: {VALID_MIN} – {VALID_MAX} μm")
+            status_var.set(f"λ = {wl} μm   →   n = {n:.6f}")
+
+        wl_c = min(PLOT_MAX, max(PLOT_MIN, wl))
+        n_c = n_silica(wl_c)
+        marker.set_data([wl_c], [n_c])
+        guide_v.set_xdata([wl_c, wl_c])
+        guide_h.set_ydata([n_c, n_c])
+        annot.xy = (wl_c, n_c)
+        annot.set_text(f"λ={wl_c:.2f}, n={n_c:.4f}")
+        set_marker_visible(True)
+        canvas.draw_idle()
 
     wl_var.trace_add("write", compute)
     entry.focus_set()
