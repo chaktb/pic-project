@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mode Field Diameter and Coupling Loss</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #ffffff; --fg: #1a1a1a; --muted: #666;
+      --card-bg: #f7f7f9; --card-border: #e1e1e6;
+      --accent: #3b5bdb; --input-bg: #ffffff; --grid: #d9d9e0;
+      --smf: #868e96; --cx: #3b5bdb; --cy: #e8590c;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0e0e10; --fg: #e8e8ea; --muted: #9a9aa3;
+        --card-bg: #1a1a1e; --card-border: #2a2a30;
+        --accent: #748ffc; --input-bg: #14141a; --grid: #2f2f37;
+        --smf: #adb5bd; --cx: #748ffc; --cy: #ffa94d;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0 auto; max-width: 880px; padding: 1.5rem;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg); color: var(--fg); line-height: 1.6;
+    }
+    .back { display: inline-block; margin-bottom: 1rem; color: var(--muted); text-decoration: none; }
+    .back:hover { text-decoration: underline; color: var(--accent); }
+    h1 { margin-bottom: 0.25rem; letter-spacing: -0.02em; }
+    .subtitle { color: var(--muted); margin-top: 0; }
+    .panel {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0;
+    }
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; }
+    label { display: flex; flex-direction: column; font-size: 0.9rem; color: var(--muted); }
+    label span.unit { font-size: 0.8rem; }
+    input[type=number] {
+      margin-top: 0.35rem; padding: 0.55rem 0.75rem; font-size: 1rem;
+      background: var(--input-bg); color: var(--fg);
+      border: 1px solid var(--card-border); border-radius: 8px;
+      font-variant-numeric: tabular-nums;
+    }
+    input[type=number]:focus { outline: none; border-color: var(--accent); }
+    .results { display: grid; grid-template-columns: 1fr auto; gap: 0.45rem 1.5rem; font-variant-numeric: tabular-nums; }
+    .results .key { color: var(--muted); }
+    .results .val { font-weight: 600; }
+    .results .val.primary { color: var(--accent); font-size: 1.15rem; }
+    .status { color: var(--muted); font-size: 0.85rem; margin-top: 0.75rem; }
+    .status.warn { color: #e8590c; }
+    svg { width: 100%; height: auto; display: block; }
+    svg text { fill: var(--muted); font-size: 12px; }
+    .legend { display: flex; gap: 1.25rem; margin-top: 0.75rem; font-size: 0.85rem; color: var(--muted); flex-wrap: wrap; }
+    .legend span { display: inline-flex; align-items: center; gap: 0.4rem; }
+    .legend i { width: 18px; height: 3px; border-radius: 2px; display: inline-block; }
+    .formula {
+      background: var(--card-bg); border-left: 3px solid var(--accent);
+      padding: 0.75rem 1rem; margin: 1rem 0; font-size: 0.9rem;
+    }
+    pre {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      padding: 1rem; border-radius: 8px; overflow-x: auto; font-size: 0.85rem;
+    }
+    .links a { display: inline-block; margin-right: 1rem; color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+    .links a:hover { text-decoration: underline; }
+    footer { margin-top: 2rem; color: var(--muted); font-size: 0.85rem; text-align: center; }
+  </style>
+</head>
+<body>
+  <a class="back" href="../">← Home</a>
+  <h1>Mode Field Diameter and Coupling Loss</h1>
+  <p class="subtitle">Channel-waveguide mode field diameter (D4σ) and butt-coupling loss, referenced to the SMF mode</p>
+
+  <div class="panel">
+    <div class="form-grid">
+      <label>Wavelength λ <span class="unit">(μm)</span>
+        <input type="number" id="wl" value="1.55" step="0.01" min="0.21" max="6.7" /></label>
+      <label>Index contrast Δ <span class="unit">(%)</span>
+        <input type="number" id="d" value="0.75" step="0.05" min="0.001" max="50" /></label>
+      <label>Width W <span class="unit">(μm)</span>
+        <input type="number" id="w" value="5.0" step="0.1" min="0.05" /></label>
+      <label>Height H <span class="unit">(μm)</span>
+        <input type="number" id="h" value="5.0" step="0.1" min="0.05" /></label>
+      <label>SMF MFD <span class="unit">(μm)</span>
+        <input type="number" id="mfd" value="10.4" step="0.1" min="1" /></label>
+    </div>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div class="panel">
+    <div class="results">
+      <div class="key">n_clad (silica, Sellmeier)</div><div class="val" id="nClad">—</div>
+      <div class="key">n_core (from Δ)</div><div class="val" id="nCore">—</div>
+      <div class="key">n_eff (vertical slab)</div><div class="val" id="nEffV">—</div>
+      <div class="key">WG MFD x — horizontal</div><div class="val" id="mfdx">—</div>
+      <div class="key">WG MFD y — vertical</div><div class="val" id="mfdy">—</div>
+      <div class="key">WG MFD (equiv. circular)</div><div class="val" id="mfdeff">—</div>
+      <div class="key">overlap η (to SMF)</div><div class="val" id="eta">—</div>
+      <div class="key">coupling loss (vs SMF)</div><div class="val primary" id="loss">—</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <svg id="chart" viewBox="0 0 820 330" role="img" aria-label="Field profiles: SMF vs waveguide mode"></svg>
+    <div class="legend">
+      <span><i style="background:var(--smf)"></i> SMF (Gaussian, reference)</span>
+      <span><i style="background:var(--cx)"></i> WG mode — x</span>
+      <span><i style="background:var(--cy)"></i> WG mode — y</span>
+    </div>
+  </div>
+
+  <h2>Method</h2>
+  <div class="formula">
+    <strong>Mode field diameter (D4σ):</strong>&nbsp;
+    σ² = ∫r²·I dr / ∫I dr,&nbsp; I = |E|²,&nbsp; <b>MFD = 4σ</b> &nbsp;(per transverse direction).
+  </div>
+  <div class="formula">
+    <strong>Coupling loss to SMF:</strong>&nbsp;
+    η = η_x·η_y,&nbsp; η_dir = (∫G·F)² / (∫G²·∫F²),&nbsp; <b>Loss(dB) = −10·log₁₀ η</b>.<br />
+    G = SMF Gaussian (w = MFD_SMF/2); F = waveguide slab-mode profile (EIM, TE-TE).
+    Cladding n from Sellmeier (Malitson 1965), core = clad / (1 − Δ/100).
+  </div>
+
+  <h2>Reference implementations</h2>
+  <p class="links">
+    <a href="https://github.com/chaktb/pic-project/blob/main/mfd_coupling.py">mfd_coupling.py</a>
+    <a href="https://github.com/chaktb/pic-project/blob/main/MfdCoupling.java">MfdCoupling.java</a>
+  </p>
+  <pre>python mfd_coupling.py 1.55 10.4 5.0 5.0 0.75
+# WG MFD (equiv circular) = 7.1204 um   coupling loss (vs SMF) = 0.622 dB</pre>
+
+  <footer>Inline JavaScript implementation matches the Python and Java versions in the repo.</footer>
+
+  <script>
+    const NS = "http://www.w3.org/2000/svg";
+
+    function nSilica(wl) {
+      const B1 = 0.6961663, B2 = 0.4079426, B3 = 0.8974794;
+      const C1 = 0.0684043**2, C2 = 0.1162414**2, C3 = 9.896161**2;
+      const l2 = wl*wl;
+      return Math.sqrt(1 + B1*l2/(l2-C1) + B2*l2/(l2-C2) + B3*l2/(l2-C3));
+    }
+
+    // (kappa, gamma, n_eff) for symmetric-slab fundamental TE, or null
+    function slabTeFundamental(wl, d, nCore, nClad) {
+      if (nCore <= nClad) return null;
+      const k0 = 2*Math.PI/wl, a = d/2;
+      const V = k0 * a * Math.sqrt(nCore*nCore - nClad*nClad);
+      if (V <= 0) return null;
+      const upper = Math.min(Math.PI/2 - 1e-9, V - 1e-12);
+      if (upper <= 0) return null;
+      const f = (u) => u*Math.tan(u) - Math.sqrt(Math.max(V*V - u*u, 0));
+      let lo = 1e-9, hi = upper, flo = f(lo), fhi = f(hi);
+      if (flo*fhi > 0) return null;
+      for (let i = 0; i < 100; i++) {
+        const mid = 0.5*(lo+hi), fmid = f(mid);
+        if (flo*fmid <= 0) { hi = mid; fhi = fmid; } else { lo = mid; flo = fmid; }
+        if (hi - lo < 1e-13) break;
+      }
+      const u = 0.5*(lo+hi);
+      const wv = Math.sqrt(Math.max(V*V - u*u, 0));
+      const kappa = u/a, gamma = wv/a;
+      const nEff = Math.sqrt(nCore*nCore - (kappa/k0)**2);
+      return { kappa, gamma, nEff };
+    }
+
+    const slabField = (r, kappa, gamma, a) =>
+      Math.abs(r) <= a ? Math.cos(kappa*r) : Math.cos(kappa*a)*Math.exp(-gamma*(Math.abs(r)-a));
+    const gaussian = (r, w) => Math.exp(-(r*r)/(w*w));
+
+    function integrate(f, lo, hi, n) {
+      const h = (hi-lo)/n;
+      let s = 0.5*(f(lo)+f(hi));
+      for (let i = 1; i < n; i++) s += f(lo + i*h);
+      return s*h;
+    }
+    function mfd1d(field, L, N) {
+      const num = integrate(r => r*r*field(r)**2, -L, L, N);
+      const den = integrate(r => field(r)**2, -L, L, N);
+      return den > 0 ? 4*Math.sqrt(num/den) : 0;
+    }
+
+    function analyze(wl, mfdSmf, W, H, nCore, nClad) {
+      const vm = slabTeFundamental(wl, H, nCore, nClad);
+      if (!vm) return null;
+      const hm = slabTeFundamental(wl, W, vm.nEff, nClad);
+      if (!hm) return null;
+      const ax = W/2, ay = H/2, wSmf = mfdSmf/2;
+      const L = Math.max(6*wSmf, 6*W, 6*H), N = 2000;
+      const fx = (x) => slabField(x, hm.kappa, hm.gamma, ax);
+      const fy = (y) => slabField(y, vm.kappa, vm.gamma, ay);
+      const mfdX = mfd1d(fx, L, N), mfdY = mfd1d(fy, L, N);
+      const overlap = (field) => {
+        const num = integrate(r => gaussian(r, wSmf)*field(r), -L, L, N);
+        const dg = integrate(r => gaussian(r, wSmf)**2, -L, L, N);
+        const df = integrate(r => field(r)**2, -L, L, N);
+        return (dg > 0 && df > 0) ? (num*num)/(dg*df) : 0;
+      };
+      const etaX = overlap(fx), etaY = overlap(fy), eta = etaX*etaY;
+      return {
+        nEffV: vm.nEff, mfdX, mfdY, mfdEff: Math.sqrt(mfdX*mfdY),
+        eta, lossDb: eta > 0 ? -10*Math.log10(eta) : Infinity,
+        fx, fy, wSmf,
+      };
+    }
+
+    // ---- chart (fixed transverse window) ----
+    const X0 = 56, X1 = 800, Y0 = 16, Y1 = 286, XR = 9;
+    const svg = document.getElementById('chart');
+    const xPx = (r) => X0 + (r + XR)/(2*XR)*(X1-X0);
+    const yPx = (v) => Y1 - v*(Y1-Y0);
+    function el(tag, attrs) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; }
+    function text(x, y, anchor, s) { const t = el('text', {x, y, 'text-anchor': anchor}); t.textContent = s; svg.appendChild(t); }
+
+    [-9,-6,-3,0,3,6,9].forEach(t => {
+      svg.appendChild(el('line', {x1: xPx(t), y1: Y0, x2: xPx(t), y2: Y1, stroke: 'var(--grid)', 'stroke-width': 1}));
+      text(xPx(t), Y1+18, 'middle', String(t));
+    });
+    [0,0.5,1].forEach(v => {
+      svg.appendChild(el('line', {x1: X0, y1: yPx(v), x2: X1, y2: yPx(v), stroke: 'var(--grid)', 'stroke-width': 1}));
+      text(X0-8, yPx(v)+4, 'end', v.toFixed(1));
+    });
+    text((X0+X1)/2, Y1+34, 'middle', 'Transverse position (μm)');
+    const curveSmf = el('path', {fill: 'none', stroke: 'var(--smf)', 'stroke-width': 2, 'stroke-dasharray': '5 3'});
+    const curveX = el('path', {fill: 'none', stroke: 'var(--cx)', 'stroke-width': 2});
+    const curveY = el('path', {fill: 'none', stroke: 'var(--cy)', 'stroke-width': 2});
+    [curveSmf, curveX, curveY].forEach(c => svg.appendChild(c));
+
+    function pathFor(field) {
+      let d = '';
+      const M = 200;
+      for (let i = 0; i <= M; i++) {
+        const r = -XR + 2*XR*i/M;
+        const v = Math.max(0, Math.min(1, field(r)));
+        d += (i ? 'L' : 'M') + xPx(r).toFixed(2) + ' ' + yPx(v).toFixed(2) + ' ';
+      }
+      return d;
+    }
+
+    function fmt(x, p) { return Number.isFinite(x) ? x.toFixed(p) : '—'; }
+
+    function compute() {
+      const wl = parseFloat(document.getElementById('wl').value);
+      const d  = parseFloat(document.getElementById('d').value);
+      const W  = parseFloat(document.getElementById('w').value);
+      const H  = parseFloat(document.getElementById('h').value);
+      const mfd = parseFloat(document.getElementById('mfd').value);
+      const ids = ['nClad','nCore','nEffV','mfdx','mfdy','mfdeff','eta','loss'];
+      const statusEl = document.getElementById('status');
+      const clear = () => { ids.forEach(i => document.getElementById(i).textContent = '—');
+        [curveSmf, curveX, curveY].forEach(c => c.setAttribute('d', '')); };
+
+      if (![wl,d,W,H,mfd].every(Number.isFinite) || wl<=0 || d<=0 || W<=0 || H<=0 || mfd<=0) {
+        clear(); statusEl.textContent = 'Enter all parameters.'; statusEl.className = 'status'; return;
+      }
+      const nClad = nSilica(wl), nCore = nClad/(1 - d/100);
+      const r = analyze(wl, mfd, W, H, nCore, nClad);
+      if (!r) { clear(); statusEl.textContent = 'No guided mode for these parameters.'; statusEl.className = 'status warn'; return; }
+
+      document.getElementById('nClad').textContent = fmt(nClad, 6);
+      document.getElementById('nCore').textContent = fmt(nCore, 6);
+      document.getElementById('nEffV').textContent = fmt(r.nEffV, 6);
+      document.getElementById('mfdx').textContent  = fmt(r.mfdX, 4) + ' μm';
+      document.getElementById('mfdy').textContent  = fmt(r.mfdY, 4) + ' μm';
+      document.getElementById('mfdeff').textContent= fmt(r.mfdEff, 4) + ' μm';
+      document.getElementById('eta').textContent   = fmt(r.eta, 6);
+      document.getElementById('loss').textContent  = fmt(r.lossDb, 3) + ' dB';
+      statusEl.textContent = `WG MFD ≈ ${fmt(r.mfdEff,2)} μm vs SMF ${mfd} μm → ${fmt(r.lossDb,3)} dB`;
+      statusEl.className = 'status';
+
+      curveSmf.setAttribute('d', pathFor((x) => gaussian(x, r.wSmf)));
+      curveX.setAttribute('d', pathFor(r.fx));
+      curveY.setAttribute('d', pathFor(r.fy));
+    }
+
+    ['wl','d','w','h','mfd'].forEach(id => document.getElementById(id).addEventListener('input', compute));
+    compute();
+  </script>
+</body>
+</html>
