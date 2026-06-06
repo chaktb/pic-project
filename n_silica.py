@@ -31,19 +31,37 @@ def n_silica(wavelength_um):
     return math.sqrt(n2)
 
 
+def n_group(wavelength_um):
+    """Group index of fused silica, n_g = n - lambda * dn/dlambda.
+
+    Differentiating the Sellmeier equation gives the closed form
+        n_g = n + (lambda^2 / n) * sum_i B_i * C_i / (lambda^2 - C_i)^2.
+    """
+    B1, B2, B3 = 0.6961663, 0.4079426, 0.8974794
+    C1, C2, C3 = 0.0684043**2, 0.1162414**2, 9.896161**2
+
+    l2 = wavelength_um**2
+    n = n_silica(wavelength_um)
+    s = B1 * C1 / (l2 - C1) ** 2 + B2 * C2 / (l2 - C2) ** 2 + B3 * C3 / (l2 - C3) ** 2
+    return n + (l2 / n) * s
+
+
 def _save_plot():
     import numpy as np
     import matplotlib.pyplot as plt
 
     wavelengths = np.linspace(0.25, 2.5, 1000)
     n = np.array([n_silica(w) for w in wavelengths])
+    ng = np.array([n_group(w) for w in wavelengths])
 
     plt.figure(figsize=(8, 5))
-    plt.plot(wavelengths, n, color="tab:blue", linewidth=2)
+    plt.plot(wavelengths, n, color="tab:blue", linewidth=2, label="n (phase index)")
+    plt.plot(wavelengths, ng, color="tab:orange", linewidth=2, label="n_g (group index)")
     plt.xlabel("Wavelength (μm)")
-    plt.ylabel("Refractive index n")
-    plt.title("Refractive Index of Fused Silica (Sellmeier Equation)")
+    plt.ylabel("Index")
+    plt.title("Fused Silica: Phase and Group Index (Sellmeier Equation)")
     plt.grid(True, linestyle="--", alpha=0.6)
+    plt.legend()
     plt.tight_layout()
     plt.savefig("n_silica.png", dpi=150)
     print("Saved: n_silica.png")
@@ -55,4 +73,4 @@ if __name__ == "__main__":
     else:
         for arg in sys.argv[1:]:
             wl = float(arg)
-            print(f"lambda = {wl:.4f} um   n = {n_silica(wl):.6f}")
+            print(f"lambda = {wl:.4f} um   n = {n_silica(wl):.6f}   n_g = {n_group(wl):.6f}")

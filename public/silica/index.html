@@ -16,6 +16,7 @@
       --input-bg: #ffffff;
       --grid: #d9d9e0;
       --curve: #3b5bdb;
+      --curve2: #e8590c;
     }
     @media (prefers-color-scheme: dark) {
       :root {
@@ -28,6 +29,7 @@
         --input-bg: #14141a;
         --grid: #2f2f37;
         --curve: #748ffc;
+        --curve2: #ffa94d;
       }
     }
     * { box-sizing: border-box; }
@@ -51,7 +53,7 @@
       padding: 1.5rem;
       margin: 1.5rem 0;
     }
-    .form-row { display: flex; align-items: flex-end; gap: 1.5rem; flex-wrap: wrap; }
+    .form-row { display: flex; align-items: flex-end; gap: 2rem; flex-wrap: wrap; }
     label { display: flex; flex-direction: column; font-size: 0.9rem; color: var(--muted); }
     label span.unit { font-size: 0.8rem; }
     input[type=number] {
@@ -68,11 +70,16 @@
     input[type=number]:focus { outline: none; border-color: var(--accent); }
     .result { display: flex; flex-direction: column; }
     .result .key { color: var(--muted); font-size: 0.9rem; }
-    .result .val { font-weight: 600; font-size: 1.6rem; color: var(--accent); font-variant-numeric: tabular-nums; }
+    .result .val { font-weight: 600; font-size: 1.6rem; font-variant-numeric: tabular-nums; }
+    .result .val.n  { color: var(--curve); }
+    .result .val.ng { color: var(--curve2); }
     .status { color: var(--muted); font-size: 0.85rem; margin-top: 0.75rem; }
     .status.warn { color: #e8590c; }
     svg { width: 100%; height: auto; display: block; }
     svg text { fill: var(--muted); font-size: 12px; }
+    .legend { display: flex; gap: 1.5rem; margin-top: 0.75rem; font-size: 0.85rem; color: var(--muted); }
+    .legend span { display: inline-flex; align-items: center; gap: 0.4rem; }
+    .legend i { width: 18px; height: 3px; border-radius: 2px; display: inline-block; }
     .formula {
       background: var(--card-bg);
       border-left: 3px solid var(--accent);
@@ -96,7 +103,7 @@
 <body>
   <a class="back" href="../">← Home</a>
   <h1>Refractive Index of Fused Silica</h1>
-  <p class="subtitle">Sellmeier equation (Malitson 1965), λ = 0.25 – 2.5 μm</p>
+  <p class="subtitle">Sellmeier equation (Malitson 1965) — phase index n and group index n_g, λ = 0.25 – 2.5 μm</p>
 
   <div class="panel">
     <div class="form-row">
@@ -106,22 +113,35 @@
       </label>
       <div class="result">
         <div class="key">Refractive index n</div>
-        <div class="val" id="nVal">—</div>
+        <div class="val n" id="nVal">—</div>
+      </div>
+      <div class="result">
+        <div class="key">Group index n_g</div>
+        <div class="val ng" id="ngVal">—</div>
       </div>
     </div>
     <div class="status" id="status"></div>
   </div>
 
   <div class="panel">
-    <svg id="chart" viewBox="0 0 820 380" role="img" aria-label="Refractive index of fused silica vs wavelength"></svg>
+    <svg id="chart" viewBox="0 0 820 380" role="img" aria-label="Refractive and group index of fused silica vs wavelength"></svg>
+    <div class="legend">
+      <span><i style="background:var(--curve)"></i> n — phase index</span>
+      <span><i style="background:var(--curve2)"></i> n_g — group index</span>
+    </div>
   </div>
 
-  <h2>Sellmeier Equation</h2>
+  <h2>Equations</h2>
   <div class="formula">
+    <strong>Sellmeier (Malitson 1965):</strong><br />
     n²(λ) = 1 + Σᵢ Bᵢ·λ² / (λ² − Cᵢ)<br />
     B₁ = 0.6961663, C₁ = 0.0684043² &nbsp;·&nbsp;
     B₂ = 0.4079426, C₂ = 0.1162414² &nbsp;·&nbsp;
     B₃ = 0.8974794, C₃ = 9.896161²
+  </div>
+  <div class="formula">
+    <strong>Group index:</strong>&nbsp;
+    n_g(λ) = n − λ·dn/dλ = n + (λ²/n) · Σᵢ Bᵢ·Cᵢ / (λ² − Cᵢ)²
   </div>
 
   <h2>Reference implementations</h2>
@@ -130,43 +150,49 @@
     <a href="https://github.com/chaktb/pic-project/blob/main/NSilica.java">NSilica.java</a>
     <a href="https://github.com/chaktb/pic-project/blob/main/n_silica_gui.py">n_silica_gui.py (Tkinter GUI)</a>
   </p>
-  <pre># Python: print n at a wavelength
-python n_silica.py 1.55          # lambda = 1.5500 um   n = 1.444024
+  <pre># Python: print n and n_g at a wavelength
+python n_silica.py 1.55      # lambda=1.5500 um   n=1.444024   n_g=1.462596
 
 # Java
 javac NSilica.java && java NSilica 1.55
 
-# Tkinter GUI: enter wavelength, marker moves on the plot
+# Tkinter GUI: enter wavelength, markers move on both curves
 python n_silica_gui.py</pre>
 
   <footer>Interactive Sellmeier plot — coefficients match the Python, Java, and GUI implementations in the repo.</footer>
 
   <script>
     const NS = "http://www.w3.org/2000/svg";
-    const WL_MIN = 0.25, WL_MAX = 2.5;      // plotted domain
-    const VALID_MIN = 0.21, VALID_MAX = 6.7; // Sellmeier validity
+    const WL_MIN = 0.25, WL_MAX = 2.5;       // plotted domain
+    const VALID_MIN = 0.21, VALID_MAX = 6.7;  // Sellmeier validity
+    const B1 = 0.6961663, B2 = 0.4079426, B3 = 0.8974794;
+    const C1 = 0.0684043 ** 2, C2 = 0.1162414 ** 2, C3 = 9.896161 ** 2;
 
     function nSilica(wl) {
-      const B1 = 0.6961663, B2 = 0.4079426, B3 = 0.8974794;
-      const C1 = 0.0684043 ** 2, C2 = 0.1162414 ** 2, C3 = 9.896161 ** 2;
       const l2 = wl * wl;
       return Math.sqrt(1 + B1*l2/(l2-C1) + B2*l2/(l2-C2) + B3*l2/(l2-C3));
     }
+    // n_g = n + (l2/n) * sum_i B_i*C_i/(l2-C_i)^2   (from n_g = n - l*dn/dl)
+    function nGroup(wl) {
+      const l2 = wl * wl;
+      const n = nSilica(wl);
+      const s = B1*C1/((l2-C1)**2) + B2*C2/((l2-C2)**2) + B3*C3/((l2-C3)**2);
+      return n + (l2 / n) * s;
+    }
 
     // chart geometry
-    const X0 = 56, X1 = 800, Y0 = 24, Y1 = 332;  // plot rectangle
+    const X0 = 56, X1 = 800, Y0 = 24, Y1 = 332;
     const svg = document.getElementById('chart');
 
-    // sample curve + y-domain
+    // sample both curves + shared y-domain
     const N = 240;
-    const pts = [];
+    const pN = [], pG = [];
     let yMin = Infinity, yMax = -Infinity;
     for (let i = 0; i <= N; i++) {
       const wl = WL_MIN + (WL_MAX - WL_MIN) * i / N;
-      const n = nSilica(wl);
-      pts.push([wl, n]);
-      if (n < yMin) yMin = n;
-      if (n > yMax) yMax = n;
+      const n = nSilica(wl), g = nGroup(wl);
+      pN.push([wl, n]); pG.push([wl, g]);
+      yMin = Math.min(yMin, n, g); yMax = Math.max(yMax, n, g);
     }
     const pad = (yMax - yMin) * 0.08;
     yMin -= pad; yMax += pad;
@@ -180,10 +206,14 @@ python n_silica_gui.py</pre>
       if (text != null) e.textContent = text;
       return e;
     }
+    function pathOf(pts) {
+      let d = '';
+      pts.forEach(([wl, n], i) => { d += (i ? 'L' : 'M') + xPx(wl).toFixed(2) + ' ' + yPx(n).toFixed(2) + ' '; });
+      return d;
+    }
 
-    // --- static layer: grid, axes, ticks, curve ---
-    const xticks = [0.25, 0.5, 1.0, 1.5, 2.0, 2.5];
-    xticks.forEach(t => {
+    // --- static layer: grid, axes, ticks, curves ---
+    [0.25, 0.5, 1.0, 1.5, 2.0, 2.5].forEach(t => {
       const x = xPx(t);
       svg.appendChild(el('line', { x1: x, y1: Y0, x2: x, y2: Y1, stroke: 'var(--grid)', 'stroke-width': 1 }));
       svg.appendChild(el('text', { x: x, y: Y1 + 18, 'text-anchor': 'middle' }, t.toFixed(2)));
@@ -194,70 +224,71 @@ python n_silica_gui.py</pre>
       svg.appendChild(el('line', { x1: X0, y1: y, x2: X1, y2: y, stroke: 'var(--grid)', 'stroke-width': 1 }));
       svg.appendChild(el('text', { x: X0 - 8, y: y + 4, 'text-anchor': 'end' }, n.toFixed(3)));
     }
-    // axis labels
     svg.appendChild(el('text', { x: (X0 + X1) / 2, y: Y1 + 36, 'text-anchor': 'middle' }, 'Wavelength λ (μm)'));
     svg.appendChild(el('text', { x: 16, y: (Y0 + Y1) / 2, 'text-anchor': 'middle',
-      transform: `rotate(-90 16 ${(Y0 + Y1) / 2})` }, 'Refractive index n'));
-
-    // curve
-    let d = '';
-    pts.forEach(([wl, n], i) => { d += (i ? 'L' : 'M') + xPx(wl).toFixed(2) + ' ' + yPx(n).toFixed(2) + ' '; });
-    svg.appendChild(el('path', { d, fill: 'none', stroke: 'var(--curve)', 'stroke-width': 2 }));
+      transform: `rotate(-90 16 ${(Y0 + Y1) / 2})` }, 'Index'));
+    svg.appendChild(el('path', { d: pathOf(pN), fill: 'none', stroke: 'var(--curve)',  'stroke-width': 2 }));
+    svg.appendChild(el('path', { d: pathOf(pG), fill: 'none', stroke: 'var(--curve2)', 'stroke-width': 2 }));
 
     // --- dynamic marker layer ---
-    const guideX = el('line', { stroke: 'var(--accent)', 'stroke-width': 1, 'stroke-dasharray': '4 3' });
-    const guideY = el('line', { stroke: 'var(--accent)', 'stroke-width': 1, 'stroke-dasharray': '4 3' });
-    const dot = el('circle', { r: 5, fill: 'var(--accent)', stroke: 'var(--bg)', 'stroke-width': 2 });
-    const tagBg = el('rect', { rx: 4, fill: 'var(--accent)' });
-    const tag = el('text', { fill: '#fff', 'font-weight': 600, 'text-anchor': 'middle' });
-    [guideX, guideY, dot, tagBg, tag].forEach(e => svg.appendChild(e));
+    const guideV = el('line', { stroke: 'var(--muted)', 'stroke-width': 1, 'stroke-dasharray': '4 3' });
+    const dotN = el('circle', { r: 5, fill: 'var(--curve)',  stroke: 'var(--bg)', 'stroke-width': 2 });
+    const dotG = el('circle', { r: 5, fill: 'var(--curve2)', stroke: 'var(--bg)', 'stroke-width': 2 });
+    const tagNbg = el('rect', { rx: 4, fill: 'var(--curve)' });
+    const tagN   = el('text', { fill: '#fff', 'font-weight': 600, 'text-anchor': 'middle' });
+    const tagGbg = el('rect', { rx: 4, fill: 'var(--curve2)' });
+    const tagG   = el('text', { fill: '#fff', 'font-weight': 600, 'text-anchor': 'middle' });
+    [guideV, dotN, dotG, tagNbg, tagN, tagGbg, tagG].forEach(e => svg.appendChild(e));
+
+    function placeTag(bg, txt, label, px, py, below) {
+      const tx = Math.min(Math.max(px, X0 + 60), X1 - 60);
+      const ty = below ? py + 24 : py - 14;
+      txt.textContent = label;
+      txt.setAttribute('x', tx); txt.setAttribute('y', ty);
+      const w = label.length * 7 + 14;
+      bg.setAttribute('x', tx - w / 2); bg.setAttribute('y', ty - 14);
+      bg.setAttribute('width', w); bg.setAttribute('height', 19);
+    }
 
     function update() {
       const raw = parseFloat(document.getElementById('wl').value);
       const nValEl = document.getElementById('nVal');
+      const ngValEl = document.getElementById('ngVal');
       const statusEl = document.getElementById('status');
-      const markVisible = (v) => [guideX, guideY, dot, tagBg, tag].forEach(e => e.setAttribute('opacity', v));
+      const vis = (v) => [guideV, dotN, dotG, tagNbg, tagN, tagGbg, tagG].forEach(e => e.setAttribute('opacity', v));
 
       if (!Number.isFinite(raw)) {
-        nValEl.textContent = '—';
-        statusEl.textContent = 'Enter a wavelength.';
-        statusEl.className = 'status';
-        markVisible(0);
-        return;
+        nValEl.textContent = '—'; ngValEl.textContent = '—';
+        statusEl.textContent = 'Enter a wavelength.'; statusEl.className = 'status';
+        vis(0); return;
       }
 
-      const n = nSilica(raw);
+      const n = nSilica(raw), g = nGroup(raw);
       nValEl.textContent = n.toFixed(6);
+      ngValEl.textContent = g.toFixed(6);
 
       if (raw < VALID_MIN || raw > VALID_MAX) {
         statusEl.textContent = `⚠ Outside Sellmeier validity (${VALID_MIN} – ${VALID_MAX} μm)`;
         statusEl.className = 'status warn';
       } else if (raw < WL_MIN || raw > WL_MAX) {
-        statusEl.textContent = `n shown; marker pinned to plotted range ${WL_MIN} – ${WL_MAX} μm`;
+        statusEl.textContent = `values shown; markers pinned to plotted range ${WL_MIN} – ${WL_MAX} μm`;
         statusEl.className = 'status';
       } else {
-        statusEl.textContent = `λ = ${raw} μm   →   n = ${n.toFixed(6)}`;
+        statusEl.textContent = `λ = ${raw} μm   →   n = ${n.toFixed(6)},   n_g = ${g.toFixed(6)}`;
         statusEl.className = 'status';
       }
 
-      // marker clamped to plotted domain
-      const wlClamped = Math.min(WL_MAX, Math.max(WL_MIN, raw));
-      const px = xPx(wlClamped), py = yPx(nSilica(wlClamped));
-      markVisible(1);
-      guideX.setAttribute('x1', px); guideX.setAttribute('y1', py);
-      guideX.setAttribute('x2', px); guideX.setAttribute('y2', Y1);
-      guideY.setAttribute('x1', X0); guideY.setAttribute('y1', py);
-      guideY.setAttribute('x2', px); guideY.setAttribute('y2', py);
-      dot.setAttribute('cx', px); dot.setAttribute('cy', py);
-
-      const label = `λ=${wlClamped.toFixed(2)}, n=${nSilica(wlClamped).toFixed(4)}`;
-      const tx = Math.min(Math.max(px, X0 + 60), X1 - 60);
-      const ty = py - 14 < Y0 + 14 ? py + 24 : py - 14;
-      tag.textContent = label;
-      tag.setAttribute('x', tx); tag.setAttribute('y', ty);
-      const w = label.length * 7 + 14;
-      tagBg.setAttribute('x', tx - w / 2); tagBg.setAttribute('y', ty - 14);
-      tagBg.setAttribute('width', w); tagBg.setAttribute('height', 19);
+      const wlC = Math.min(WL_MAX, Math.max(WL_MIN, raw));
+      const px = xPx(wlC);
+      const pyN = yPx(nSilica(wlC)), pyG = yPx(nGroup(wlC));
+      vis(1);
+      guideV.setAttribute('x1', px); guideV.setAttribute('y1', Y0);
+      guideV.setAttribute('x2', px); guideV.setAttribute('y2', Y1);
+      dotN.setAttribute('cx', px); dotN.setAttribute('cy', pyN);
+      dotG.setAttribute('cx', px); dotG.setAttribute('cy', pyG);
+      // n_g >= n, so its dot is higher (smaller y): label it above, n below
+      placeTag(tagGbg, tagG, `n_g=${nGroup(wlC).toFixed(4)}`, px, pyG, false);
+      placeTag(tagNbg, tagN, `n=${nSilica(wlC).toFixed(4)}`, px, pyN, true);
     }
 
     document.getElementById('wl').addEventListener('input', update);
