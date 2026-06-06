@@ -3,7 +3,8 @@
 Inputs: wavelength (um), core width W (um), core height H (um),
         index contrast delta = (n_core - n_clad) / n_core * 100 (%).
 
-n_core is computed from the Sellmeier equation (Malitson 1965) for fused silica.
+n_clad is the fused-silica index from the Sellmeier equation (Malitson 1965);
+n_core is then derived from the contrast: n_core = n_clad / (1 - delta/100).
 """
 
 import math
@@ -58,8 +59,8 @@ def slab_neff_te(wavelength_um, thickness_um, n_core, n_clad):
 
 
 def n_eff(wavelength_um, width_um, height_um, delta_percent):
-    n_core = n_silica(wavelength_um)
-    n_clad = n_core * (1 - delta_percent / 100.0)
+    n_clad = n_silica(wavelength_um)
+    n_core = n_clad / (1 - delta_percent / 100.0)
     n_eff_v = slab_neff_te(wavelength_um, height_um, n_core, n_clad)
     n_eff_total = slab_neff_te(wavelength_um, width_um, n_eff_v, n_clad)
     return {
@@ -80,7 +81,7 @@ if __name__ == "__main__":
     print(f"wavelength            = {wl:.4f} um")
     print(f"core size  W x H      = {w:.4f} x {h:.4f} um")
     print(f"index contrast        = {d:.4f} %")
-    print(f"n_core (Sellmeier)    = {r['n_core']:.6f}")
-    print(f"n_clad                = {r['n_clad']:.6f}")
+    print(f"n_clad (Sellmeier)    = {r['n_clad']:.6f}")
+    print(f"n_core (from delta)   = {r['n_core']:.6f}")
     print(f"n_eff (vertical slab) = {r['n_eff_vertical']:.6f}")
     print(f"n_eff (full EIM)      = {r['n_eff']:.6f}")

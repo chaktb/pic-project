@@ -137,8 +137,8 @@
 
   <div class="panel">
     <div class="results">
-      <div class="key">n_core (from Sellmeier)</div><div class="val" id="nCore">—</div>
-      <div class="key">n_clad</div><div class="val" id="nClad">—</div>
+      <div class="key">n_clad (silica, Sellmeier)</div><div class="val" id="nClad">—</div>
+      <div class="key">n_core (from Δ)</div><div class="val" id="nCore">—</div>
       <div class="key">n_eff (vertical slab)</div><div class="val" id="nEffV">—</div>
       <div class="key">n_eff (full EIM)</div><div class="val primary" id="nEff">—</div>
     </div>
@@ -216,8 +216,8 @@
         return;
       }
 
-      const nCore = nSilica(wl);
-      const nClad = nCore * (1 - d/100);
+      const nClad = nSilica(wl);
+      const nCore = nClad / (1 - d/100);
       const nEffV = slabNeffTE(wl, h, nCore, nClad);
       const nEff  = slabNeffTE(wl, w, nEffV, nClad);
 

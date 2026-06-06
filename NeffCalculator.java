@@ -4,7 +4,8 @@
  * Inputs: wavelength (um), core width W (um), core height H (um),
  *         index contrast delta = (n_core - n_clad) / n_core * 100 (%).
  *
- * n_core is computed from the Sellmeier equation (Malitson 1965).
+ * n_clad is the fused-silica Sellmeier index (Malitson 1965);
+ * n_core is derived from the contrast: n_core = n_clad / (1 - delta/100).
  *
  * Compile: javac NeffCalculator.java
  * Run:     java NeffCalculator 1.55 5.0 5.0 0.75
@@ -55,8 +56,8 @@ public class NeffCalculator {
     }
 
     public static double[] computeNeff(double wlUm, double wUm, double hUm, double deltaPct) {
-        double nCore = nSilica(wlUm);
-        double nClad = nCore * (1.0 - deltaPct / 100.0);
+        double nClad = nSilica(wlUm);
+        double nCore = nClad / (1.0 - deltaPct / 100.0);
         double nEffV = slabNeffTE(wlUm, hUm, nCore, nClad);
         double nEff  = slabNeffTE(wlUm, wUm, nEffV, nClad);
         return new double[] { nCore, nClad, nEffV, nEff };
@@ -76,8 +77,8 @@ public class NeffCalculator {
         System.out.printf("wavelength            = %.4f um%n", wl);
         System.out.printf("core size  W x H      = %.4f x %.4f um%n", w, h);
         System.out.printf("index contrast        = %.4f %%%n", d);
-        System.out.printf("n_core (Sellmeier)    = %.6f%n", r[0]);
-        System.out.printf("n_clad                = %.6f%n", r[1]);
+        System.out.printf("n_clad (Sellmeier)    = %.6f%n", r[1]);
+        System.out.printf("n_core (from delta)   = %.6f%n", r[0]);
         System.out.printf("n_eff (vertical slab) = %.6f%n", r[2]);
         System.out.printf("n_eff (full EIM)      = %.6f%n", r[3]);
     }
