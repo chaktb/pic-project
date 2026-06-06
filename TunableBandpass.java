@@ -58,7 +58,7 @@ public class TunableBandpass {
 
     /** Returns [kappa, n_eff] at wl, or null. */
     public static double[] kappaNeff(double wl, double W, double H, double dl, double gap) {
-        double nC = nSilica(wl), nCl = nC * (1 - dl/100);
+        double nCl = nSilica(wl), nC = nCl / (1 - dl/100);
         double[] v = slabFundamentalTE(wl, H, nC, nCl);
         if (v == null) return null;
         double[] h = slabFundamentalTE(wl, W, v[2], nCl);

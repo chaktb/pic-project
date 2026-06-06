@@ -76,8 +76,8 @@ def main():
         sys.exit(1)
     wl, d, delta = (float(x) for x in sys.argv[1:4])
 
-    n_core = n_silica(wl)
-    n_clad = n_core * (1 - delta / 100)
+    n_clad = n_silica(wl)
+    n_core = n_clad / (1 - delta / 100)
     V_op = operating_V(wl, d, n_core, n_clad)
     single_mode = V_op < math.pi / 2
 

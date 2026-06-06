@@ -43,7 +43,7 @@ public class LatticeFilter {
         return u * Math.tan(u) - Math.sqrt(Math.max(V*V - u*u, 0));
     }
     public static double[] kappaNeff(double wl, double W, double H, double dl, double gap) {
-        double nC = nSilica(wl), nCl = nC*(1-dl/100);
+        double nCl = nSilica(wl), nC = nCl / (1-dl/100);
         double[] v = slabFundamentalTE(wl, H, nC, nCl); if (v == null) return null;
         double[] h = slabFundamentalTE(wl, W, v[2], nCl); if (h == null) return null;
         double k0 = 2*Math.PI/wl, beta = h[2]*k0, a = W/2, h2 = h[0]*h[0];

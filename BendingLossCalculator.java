@@ -97,8 +97,8 @@ public class BendingLossCalculator {
         double theta = Math.toRadians(thetaDeg);
         double R = Rmm * 1000.0;
 
-        double nCore = nSilica(wl);
-        double nClad = nCore * (1.0 - dl/100.0);
+        double nClad = nSilica(wl);
+        double nCore = nClad / (1.0 - dl/100.0);
         double[] vmode = slabFundamentalTE(wl, H, nCore, nClad);
         if (vmode == null) { System.out.println("No vertical mode."); return; }
         double[] hmode = slabFundamentalTE(wl, W, vmode[2], nClad);

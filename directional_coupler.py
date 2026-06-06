@@ -15,7 +15,7 @@ Power transfer (lossless):
     L_50         = pi / (4 * kappa)        (3 dB / 50:50)
 
 Loss(dB) = -10 log10(power fraction) at each output port.
-Sellmeier (Malitson 1965) gives n_core(lambda) for fused silica.
+Sellmeier (Malitson 1965) gives n_clad(lambda) for fused silica (core = clad / (1 - delta/100)).
 """
 
 import math
@@ -62,8 +62,8 @@ def slab_te_fundamental(wl, d, n_core, n_clad):
 
 
 def coupling_coefficient(wl, W, H, delta, gap):
-    n_core = n_silica(wl)
-    n_clad = n_core * (1 - delta / 100)
+    n_clad = n_silica(wl)
+    n_core = n_clad / (1 - delta / 100)
     vmode = slab_te_fundamental(wl, H, n_core, n_clad)
     if vmode is None:
         return None

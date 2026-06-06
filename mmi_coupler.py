@@ -55,8 +55,8 @@ def slab_te_fundamental(wl, d, n_core, n_clad):
 
 
 def mmi_design(wl, W_wg, H, delta, M, N, gap, sigma=0):
-    n_core = n_silica(wl)
-    n_clad = n_core * (1 - delta / 100.0)
+    n_clad = n_silica(wl)
+    n_core = n_clad / (1 - delta / 100.0)
     vmode = slab_te_fundamental(wl, H, n_core, n_clad)
     n_eff = vmode[2] if vmode else n_core
 

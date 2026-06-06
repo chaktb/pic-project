@@ -95,8 +95,8 @@
 
   <div class="panel">
     <div class="results">
-      <div class="key">n_core (Sellmeier)</div><div class="val" id="nCore">—</div>
-      <div class="key">n_clad</div><div class="val" id="nClad">—</div>
+      <div class="key">n_core (from Δ)</div><div class="val" id="nCore">—</div>
+      <div class="key">n_clad (silica, Sellmeier)</div><div class="val" id="nClad">—</div>
       <div class="key">n_eff (total)</div><div class="val" id="nEff">—</div>
       <div class="key">κ_x, γ_x (slab)</div><div class="val" id="kxgx">—</div>
       <div class="key">κ (coupling)</div><div class="val" id="kappa">—</div>
@@ -169,8 +169,8 @@
       if (![wl,W,H,dl,gap,L].every(Number.isFinite) ||
           wl<=0||W<=0||H<=0||dl<=0||gap<=0||L<=0) return;
 
-      const nCore = nSilica(wl);
-      const nClad = nCore * (1 - dl/100);
+      const nClad = nSilica(wl);
+      const nCore = nClad / (1 - dl/100);
       const v = slabFundamentalTE(wl, H, nCore, nClad);
       if (!v) { setNoMode(); return; }
       const h = slabFundamentalTE(wl, W, v.nEff, nClad);

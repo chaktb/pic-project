@@ -55,8 +55,8 @@ public class DirectionalCoupler {
         double gap = Double.parseDouble(args[4]);
         double L_DC = Double.parseDouble(args[5]);
 
-        double nCore = nSilica(wl);
-        double nClad = nCore * (1.0 - dl / 100.0);
+        double nClad = nSilica(wl);
+        double nCore = nClad / (1.0 - dl / 100.0);
         double[] vmode = slabFundamentalTE(wl, H, nCore, nClad);
         if (vmode == null) { System.out.println("No vertical mode."); return; }
         double[] hmode = slabFundamentalTE(wl, W, vmode[2], nClad);

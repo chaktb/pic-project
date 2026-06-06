@@ -98,8 +98,8 @@
 
   <div class="panel">
     <div class="results">
-      <div class="key">n_core (Sellmeier)</div><div class="val" id="nCore">—</div>
-      <div class="key">n_clad</div><div class="val" id="nClad">—</div>
+      <div class="key">n_core (from Δ)</div><div class="val" id="nCore">—</div>
+      <div class="key">n_clad (silica, Sellmeier)</div><div class="val" id="nClad">—</div>
       <div class="key">pitch (= W + gap)</div><div class="val" id="pitch">—</div>
       <div class="key">W_MMI</div><div class="val primary" id="WMMI">—</div>
       <div class="key">W_eff (Goos-Hänchen)</div><div class="val" id="We">—</div>
@@ -143,8 +143,8 @@
     }
 
     function design(wl, Wwg, H, dl, M, N, gap, sigma=0) {
-      const nCore = nSilica(wl);
-      const nClad = nCore * (1 - dl/100);
+      const nClad = nSilica(wl);
+      const nCore = nClad / (1 - dl/100);
       const Nmax = Math.max(M, N);
       const pitch = Wwg + gap;
       const WMMI = Nmax * pitch;

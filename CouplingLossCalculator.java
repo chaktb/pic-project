@@ -112,8 +112,8 @@ public class CouplingLossCalculator {
         double W   = Double.parseDouble(args[2]);
         double H   = Double.parseDouble(args[3]);
         double dl  = Double.parseDouble(args[4]);
-        double nCore = nSilica(wl);
-        double nClad = nCore * (1.0 - dl / 100.0);
+        double nClad = nSilica(wl);
+        double nCore = nClad / (1.0 - dl / 100.0);
         double[] r = couplingLoss(wl, mfd, W, H, nCore, nClad);
         if (r == null) { System.out.println("No guided mode."); return; }
         System.out.printf("wavelength            = %.4f um%n", wl);

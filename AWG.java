@@ -59,8 +59,8 @@ public class AWG {
 
     /** EIM (TE-TE): returns [n_eff_a, n_eff_s] or null. */
     public static double[] eim(double wl, double W, double H, double deltaPct) {
-        double nCore = nSilica(wl);
-        double nClad = nCore * (1 - deltaPct / 100.0);
+        double nClad = nSilica(wl);
+        double nCore = nClad / (1 - deltaPct / 100.0);
         double[] v = slabFundamentalTE(wl, H, nCore, nClad);
         if (v == null) return null;
         double nEffS = v[1];

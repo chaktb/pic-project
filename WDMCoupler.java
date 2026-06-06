@@ -43,8 +43,8 @@ public class WDMCoupler {
     }
 
     public static double kappaAt(double wl, double W, double H, double dl, double gap) {
-        double nC = nSilica(wl);
-        double nCl = nC * (1 - dl/100);
+        double nCl = nSilica(wl);
+        double nC = nCl / (1 - dl/100);
         double[] v = slabFundamentalTE(wl, H, nC, nCl);
         if (v == null) return Double.NaN;
         double[] h = slabFundamentalTE(wl, W, v[2], nCl);

@@ -12,7 +12,7 @@ Total bend loss for an arc of angle theta (radians):
 
     Loss_dB(R, theta) = 4.343 * alpha(R) * R * theta
 
-Sellmeier (Malitson 1965) gives n_core for fused silica.
+Sellmeier (Malitson 1965) gives n_clad for fused silica (core = clad / (1 - delta/100)).
 """
 
 import math
@@ -124,8 +124,8 @@ def main():
     theta = math.radians(theta_deg)
     R_um = R_mm * 1000
 
-    n_core = n_silica(wl)
-    n_clad = n_core * (1 - delta / 100)
+    n_clad = n_silica(wl)
+    n_core = n_clad / (1 - delta / 100)
     vmode = slab_te_fundamental(wl, H, n_core, n_clad)
     if vmode is None:
         print("No vertical mode."); sys.exit(1)

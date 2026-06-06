@@ -105,8 +105,8 @@
 
   <div class="panel">
     <div class="results">
-      <div class="key">n_core (Sellmeier)</div><div class="val" id="nCore">—</div>
-      <div class="key">n_clad</div><div class="val" id="nClad">—</div>
+      <div class="key">n_core (from Δ)</div><div class="val" id="nCore">—</div>
+      <div class="key">n_clad (silica, Sellmeier)</div><div class="val" id="nClad">—</div>
       <div class="key">n_eff (vertical slab)</div><div class="val" id="nEffV">—</div>
       <div class="key">η_x (horizontal overlap)</div><div class="val" id="etaX">—</div>
       <div class="key">η_y (vertical overlap)</div><div class="val" id="etaY">—</div>
@@ -211,8 +211,8 @@
       if (![wl,mfd,W,H,dl].every(Number.isFinite) ||
           wl<=0 || mfd<=0 || W<=0 || H<=0 || dl<=0) return;
 
-      const nCore = nSilica(wl);
-      const nClad = nCore * (1 - dl/100);
+      const nClad = nSilica(wl);
+      const nCore = nClad / (1 - dl/100);
       document.getElementById('nCore').textContent = nCore.toFixed(6);
       document.getElementById('nClad').textContent = nClad.toFixed(6);
 

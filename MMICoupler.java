@@ -58,8 +58,8 @@ public class MMICoupler {
         double gap  = Double.parseDouble(args[6]);
         double sigma = 0.0; // TE
 
-        double nCore = nSilica(wl);
-        double nClad = nCore * (1.0 - dl/100.0);
+        double nClad = nSilica(wl);
+        double nCore = nClad / (1.0 - dl/100.0);
         double[] vmode = slabFundamentalTE(wl, H, nCore, nClad);
         double nEff = vmode != null ? vmode[2] : nCore;
 

@@ -154,8 +154,8 @@
       return { kappa: u/a, gamma: w/a, nEff: Math.sqrt(nC*nC - (u/a/k0)**2) };
     }
     function kappaAt(wl, W, H, dl, gap) {
-      const nCore = nSilica(wl);
-      const nClad = nCore * (1 - dl/100);
+      const nClad = nSilica(wl);
+      const nCore = nClad / (1 - dl/100);
       const v = slabFundamentalTE(wl, H, nCore, nClad);
       if (!v) return null;
       const h = slabFundamentalTE(wl, W, v.nEff, nClad);

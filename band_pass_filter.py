@@ -71,8 +71,8 @@ def slab_te_fundamental(wl, d, n_core, n_clad):
 
 def kappa_neff(wl, W, H, delta, gap):
     """Returns (kappa per um, n_eff) at this wavelength, or None."""
-    n_core = n_silica(wl)
-    n_clad = n_core * (1 - delta / 100)
+    n_clad = n_silica(wl)
+    n_core = n_clad / (1 - delta / 100)
     v = slab_te_fundamental(wl, H, n_core, n_clad)
     if v is None:
         return None

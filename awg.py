@@ -77,8 +77,8 @@ def eim(wl, W, H, delta_pct):
         n_eff_a = channel mode index (used as beta source for the array waveguide)
         n_eff_s = vertical slab mode index (used for the star coupler region)
     """
-    n_core = n_silica(wl)
-    n_clad = n_core * (1 - delta_pct/100.0)
+    n_clad = n_silica(wl)
+    n_core = n_clad / (1 - delta_pct/100.0)
     v = slab_te_fundamental(wl, H, n_core, n_clad)
     if v is None:
         return None

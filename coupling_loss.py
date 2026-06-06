@@ -10,7 +10,7 @@ Method:
     eta_dir = (integral G * F)^2 / (integral G^2 * integral F^2).
   - Coupling loss (dB) = -10 log10(eta).
 
-Sellmeier (Malitson 1965) gives n_core for fused silica.
+Sellmeier (Malitson 1965) gives n_clad for fused silica (core = clad / (1 - delta/100)).
 """
 
 import math
@@ -129,8 +129,8 @@ def main():
         print("Example: python coupling_loss.py 1.55 10.4 5.0 5.0 0.75")
         sys.exit(1)
     wl, mfd, W, H, delta = (float(x) for x in sys.argv[1:6])
-    n_core = n_silica(wl)
-    n_clad = n_core * (1 - delta / 100)
+    n_clad = n_silica(wl)
+    n_core = n_clad / (1 - delta / 100)
 
     r = coupling_loss(wl, mfd, W, H, n_core, n_clad)
     if r is None:

@@ -66,8 +66,8 @@ public class VBCurveCalculator {
         double d  = Double.parseDouble(args[1]);
         double dl = Double.parseDouble(args[2]);
 
-        double nCore = nSilica(wl);
-        double nClad = nCore * (1.0 - dl / 100.0);
+        double nClad = nSilica(wl);
+        double nCore = nClad / (1.0 - dl / 100.0);
         double Vop = operatingV(wl, d, nCore, nClad);
         boolean single = Vop < Math.PI / 2.0;
 

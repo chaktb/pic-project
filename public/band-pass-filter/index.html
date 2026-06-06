@@ -176,7 +176,7 @@
       return { kappa: u/a, gamma: w/a, nEff: Math.sqrt(nC*nC - (u/a/k0)**2) };
     }
     function kappaNeff(wl, W, H, dl, gap) {
-      const nC = nSilica(wl), nCl = nC * (1 - dl/100);
+      const nCl = nSilica(wl), nC = nCl / (1 - dl/100);
       const v = slabFundamentalTE(wl, H, nC, nCl); if (!v) return null;
       const h = slabFundamentalTE(wl, W, v.nEff, nCl); if (!h) return null;
       const k0 = 2*Math.PI/wl, beta = h.nEff*k0, a = W/2, h2 = h.kappa*h.kappa;

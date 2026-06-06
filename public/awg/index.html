@@ -246,7 +246,7 @@
     // n_eff_a : channel mode index
     // n_eff_s : slab (=horizontal) effective index — used for the star slab
     function eim(wl, W, H, deltaPct) {
-      const nC = nSilica(wl), nCl = nC * (1 - deltaPct/100);
+      const nCl = nSilica(wl), nC = nCl / (1 - deltaPct/100);
       const v = slabFundamentalTE(wl, H, nC, nCl); if (!v) return null;
       const h = slabFundamentalTE(wl, W, v.nEff, nCl); if (!h) return null;
       return { nEffA: h.nEff, nEffS: v.nEff };
