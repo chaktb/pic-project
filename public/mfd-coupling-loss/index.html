@@ -111,6 +111,11 @@
     </div>
   </div>
 
+  <div class="panel">
+    <svg id="lossChart" viewBox="0 0 820 290" role="img" aria-label="Coupling loss vs wavelength"></svg>
+    <p class="status" style="margin-top:0.5rem">Coupling loss vs wavelength (1.2 – 1.7 μm), with Δ, W, H and SMF MFD held at the values above. ● marks the current λ.</p>
+  </div>
+
   <h2>Method</h2>
   <div class="formula">
     <strong>Mode field diameter (D4σ):</strong>&nbsp;
@@ -239,6 +244,79 @@
       return d;
     }
 
+    // ---- coupling loss vs wavelength chart ----
+    const svg2 = document.getElementById('lossChart');
+    const LX0 = 56, LX1 = 800, LY0 = 18, LY1 = 250, WL_LO = 1.2, WL_HI = 1.7;
+
+    // coupling loss (dB) only, for the wavelength sweep; null if no guided mode
+    function lossAt(wl, d, W, H, mfd) {
+      const nClad = nSilica(wl), nCore = nClad / (1 - d/100);
+      const vm = slabTeFundamental(wl, H, nCore, nClad); if (!vm) return null;
+      const hm = slabTeFundamental(wl, W, vm.nEff, nClad); if (!hm) return null;
+      const ax = W/2, ay = H/2, wSmf = mfd/2;
+      const L = Math.max(6*wSmf, 6*W, 6*H), N = 1400;
+      const fx = (x) => slabField(x, hm.kappa, hm.gamma, ax);
+      const fy = (y) => slabField(y, vm.kappa, vm.gamma, ay);
+      const overlap = (field) => {
+        const num = integrate(r => gaussian(r, wSmf)*field(r), -L, L, N);
+        const dg = integrate(r => gaussian(r, wSmf)**2, -L, L, N);
+        const df = integrate(r => field(r)**2, -L, L, N);
+        return (dg > 0 && df > 0) ? (num*num)/(dg*df) : 0;
+      };
+      const eta = overlap(fx) * overlap(fy);
+      return eta > 0 ? -10*Math.log10(eta) : null;
+    }
+
+    function drawLossChart(d, W, H, mfd, curWl, curLoss) {
+      while (svg2.firstChild) svg2.removeChild(svg2.firstChild);
+      const mk = (tag, attrs) => { const e = document.createElementNS(NS, tag);
+        for (const k in attrs) e.setAttribute(k, attrs[k]); svg2.appendChild(e); return e; };
+      const txt = (x, y, a, s, extra) => { const t = mk('text', Object.assign({x, y, 'text-anchor': a}, extra||{})); t.textContent = s; };
+
+      const M = 44, pts = [];
+      let yMin = Infinity, yMax = -Infinity;
+      for (let i = 0; i <= M; i++) {
+        const wl = WL_LO + (WL_HI - WL_LO)*i/M;
+        const ld = lossAt(wl, d, W, H, mfd);
+        if (ld == null || !Number.isFinite(ld)) continue;
+        pts.push([wl, ld]); yMin = Math.min(yMin, ld); yMax = Math.max(yMax, ld);
+      }
+      if (!pts.length) return;
+      const markable = curLoss != null && Number.isFinite(curLoss) && curWl >= WL_LO && curWl <= WL_HI;
+      if (markable) { yMin = Math.min(yMin, curLoss); yMax = Math.max(yMax, curLoss); }
+      let pad = (yMax - yMin)*0.12; if (pad < 1e-3) pad = Math.max(0.05, yMax*0.05);
+      yMin = Math.max(0, yMin - pad); yMax += pad;
+
+      const xp = (wl) => LX0 + (wl - WL_LO)/(WL_HI - WL_LO)*(LX1 - LX0);
+      const yp = (v)  => LY1 - (v - yMin)/(yMax - yMin)*(LY1 - LY0);
+
+      [1.2,1.3,1.4,1.5,1.6,1.7].forEach(t => {
+        mk('line', {x1: xp(t), y1: LY0, x2: xp(t), y2: LY1, stroke: 'var(--grid)', 'stroke-width': 1});
+        txt(xp(t), LY1+18, 'middle', t.toFixed(1));
+      });
+      for (let i = 0; i <= 4; i++) {
+        const v = yMin + (yMax - yMin)*i/4;
+        mk('line', {x1: LX0, y1: yp(v), x2: LX1, y2: yp(v), stroke: 'var(--grid)', 'stroke-width': 1});
+        txt(LX0-8, yp(v)+4, 'end', v.toFixed(2));
+      }
+      txt((LX0+LX1)/2, LY1+34, 'middle', 'Wavelength λ (μm)');
+      txt(16, (LY0+LY1)/2, 'middle', 'Coupling loss (dB)', {transform: `rotate(-90 16 ${(LY0+LY1)/2})`});
+
+      let dpath = '';
+      pts.forEach(([wl, v], i) => { dpath += (i ? 'L' : 'M') + xp(wl).toFixed(2) + ' ' + yp(v).toFixed(2) + ' '; });
+      mk('path', {d: dpath, fill: 'none', stroke: 'var(--accent)', 'stroke-width': 2});
+
+      if (markable) {
+        const px = xp(curWl), py = yp(curLoss);
+        mk('line', {x1: px, y1: LY0, x2: px, y2: LY1, stroke: 'var(--muted)', 'stroke-width': 1, 'stroke-dasharray': '4 3'});
+        mk('circle', {cx: px, cy: py, r: 5, fill: 'var(--accent)', stroke: 'var(--bg)', 'stroke-width': 2});
+        const lbl = `λ=${curWl}, ${curLoss.toFixed(3)} dB`;
+        const tx = Math.min(Math.max(px, LX0+60), LX1-60);
+        const ty = py - 12 < LY0 + 12 ? py + 22 : py - 12;
+        txt(tx, ty, 'middle', lbl, {fill: 'var(--accent)', 'font-weight': 600});
+      }
+    }
+
     function fmt(x, p) { return Number.isFinite(x) ? x.toFixed(p) : '—'; }
 
     function compute() {
@@ -250,7 +328,8 @@
       const ids = ['nClad','nCore','nEffV','mfdx','mfdy','mfdeff','eta','loss'];
       const statusEl = document.getElementById('status');
       const clear = () => { ids.forEach(i => document.getElementById(i).textContent = '—');
-        [curveSmf, curveX, curveY].forEach(c => c.setAttribute('d', '')); };
+        [curveSmf, curveX, curveY].forEach(c => c.setAttribute('d', ''));
+        while (svg2.firstChild) svg2.removeChild(svg2.firstChild); };
 
       if (![wl,d,W,H,mfd].every(Number.isFinite) || wl<=0 || d<=0 || W<=0 || H<=0 || mfd<=0) {
         clear(); statusEl.textContent = 'Enter all parameters.'; statusEl.className = 'status'; return;
@@ -273,6 +352,8 @@
       curveSmf.setAttribute('d', pathFor((x) => gaussian(x, r.wSmf)));
       curveX.setAttribute('d', pathFor(r.fx));
       curveY.setAttribute('d', pathFor(r.fy));
+
+      drawLossChart(d, W, H, mfd, wl, r.lossDb);
     }
 
     ['wl','d','w','h','mfd'].forEach(id => document.getElementById(id).addEventListener('input', compute));
