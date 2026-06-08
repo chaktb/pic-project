@@ -1,0 +1,28 @@
+# Hidden / tooling directories
+.claude/
+.idx/
+
+# Python cache & sources
+__pycache__/
+*.pyc
+*.py
+
+# Java / class sources
+*.java
+*.class
+
+# MATLAB / data / simulation inputs
+*.m
+*.dat
+*.DAT
+*.inx
+*.sel
+*.mod
+*.gds
+*.dxf
+*.awg
+
+# Extension-less scratch/download files
+download
+download_1
+download_2
