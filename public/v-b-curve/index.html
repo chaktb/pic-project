@@ -150,6 +150,7 @@
       <div class="key">V (operating)</div><div class="val" id="vop">—</div>
       <div class="key">V cutoff (<span id="cutoffModeLabel">TE</span>_1)</div><div class="val">π/2 ≈ 1.5708</div>
       <div class="key">b (fundamental <span id="b0ModeLabel">TE</span>_0)</div><div class="val" id="b0">—</div>
+      <div class="key">n_eff (fundamental <span id="neffModeLabel">TE</span>_0)</div><div class="val" id="neff">—</div>
       <div class="key">Single mode?</div><div class="val"><span id="singleBadge" class="badge">—</span></div>
     </div>
   </div>
@@ -226,7 +227,7 @@
     // --- chart ---
     const MODE_COLORS = ["#e03131", "#1971c2", "#2f9e44", "#f08c00"]; // red, blue, green, orange
 
-    function drawChart(Vop, eta, pol) {
+    function drawChart(Vop, etaTM, pol) {
       const canvas = document.getElementById('chart');
       const dpr = window.devicePixelRatio || 1;
       const cssW = canvas.clientWidth || 880;
@@ -315,11 +316,12 @@
         ctx.fillText(`V_c=${(m).toString()}π/2`, xs(Vc) + 3, margin.top + 28 + (m-1)*12);
       }
 
-      // mode curves
+      // mode curves: TE (solid, eta=1) and TM (dashed, eta=etaTM)
       const N = 400;
-      for (let m = 0; m < 4; m++) {
+      const drawModeCurve = (m, eta, dashed) => {
         ctx.strokeStyle = MODE_COLORS[m];
         ctx.lineWidth = 2;
+        ctx.setLineDash(dashed ? [5, 4] : []);
         ctx.beginPath();
         let started = false;
         for (let i = 0; i <= N; i++) {
@@ -331,18 +333,33 @@
           else ctx.lineTo(xs(V), ys(b));
         }
         ctx.stroke();
+        ctx.setLineDash([]);
+      };
+      for (let m = 0; m < 4; m++) {
+        drawModeCurve(m, 1, false);        // TE
+        drawModeCurve(m, etaTM, true);     // TM
       }
 
-      // legend
-      const legendX = margin.left + W - 80;
+      // legend: mode colors + TE/TM line styles
+      const legendX = margin.left + W - 90;
       const legendY = margin.top + 10;
       ctx.font = '12px -apple-system, sans-serif';
       for (let m = 0; m < 4; m++) {
         ctx.fillStyle = MODE_COLORS[m];
         ctx.fillRect(legendX, legendY + m*16 - 8, 12, 3);
         ctx.fillStyle = fg;
-        ctx.fillText(`${pol}_${m}`, legendX + 18, legendY + m*16 - 2);
+        ctx.fillText(`mode ${m}`, legendX + 18, legendY + m*16 - 2);
       }
+      const styleY = legendY + 4*16 + 4;
+      ctx.strokeStyle = fg;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(legendX, styleY - 4); ctx.lineTo(legendX + 12, styleY - 4); ctx.stroke();
+      ctx.fillStyle = fg; ctx.fillText('TE', legendX + 18, styleY);
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath(); ctx.moveTo(legendX, styleY + 12); ctx.lineTo(legendX + 12, styleY + 12); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = fg; ctx.fillText('TM', legendX + 18, styleY + 16);
 
       // operating point marker
       if (Vop > 0 && Vop <= Vmax) {
@@ -354,16 +371,26 @@
         ctx.lineTo(xs(Vop), margin.top + H);
         ctx.stroke();
         ctx.setLineDash([]);
-        const b0 = bForMode(Vop, 0, eta);
-        if (b0 !== null) {
-          ctx.fillStyle = '#000';
+        const b0te = bForMode(Vop, 0, 1);
+        const b0tm = bForMode(Vop, 0, etaTM);
+        // TE_0: filled dot
+        if (b0te !== null) {
+          ctx.fillStyle = MODE_COLORS[0];
           ctx.beginPath();
-          ctx.arc(xs(Vop), ys(b0), 5, 0, 2*Math.PI);
+          ctx.arc(xs(Vop), ys(b0te), 5, 0, 2*Math.PI);
           ctx.fill();
-          ctx.fillStyle = fg;
-          ctx.font = 'bold 12px -apple-system, sans-serif';
-          ctx.fillText(`V_op=${Vop.toFixed(2)}`, xs(Vop) + 8, margin.top + 14);
         }
+        // TM_0: hollow dot
+        if (b0tm !== null) {
+          ctx.strokeStyle = MODE_COLORS[0];
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(xs(Vop), ys(b0tm), 5, 0, 2*Math.PI);
+          ctx.stroke();
+        }
+        ctx.fillStyle = fg;
+        ctx.font = 'bold 12px -apple-system, sans-serif';
+        ctx.fillText(`V_op=${Vop.toFixed(2)} (${pol})`, xs(Vop) + 8, margin.top + 14);
       }
     }
 
@@ -381,22 +408,28 @@
 
       const nClad = nSilica(wl);
       const nCore = nClad / (1 - dl/100);
-      const eta = pol === 'TM' ? (nCore / nClad) ** 2 : 1;
+      const etaTM = (nCore / nClad) ** 2;
+      const eta = pol === 'TM' ? etaTM : 1;
       const Vop = operatingV(wl, d, nCore, nClad);
       const b0 = bForMode(Vop, 0, eta);
+      // effective index of the selected polarization's fundamental mode
+      const nEff = b0 === null ? null
+        : Math.sqrt(nClad*nClad + b0 * (nCore*nCore - nClad*nClad));
       const single = Vop < Math.PI / 2;
 
       document.getElementById('cutoffModeLabel').textContent = pol;
       document.getElementById('b0ModeLabel').textContent = pol;
+      document.getElementById('neffModeLabel').textContent = pol;
       document.getElementById('nCore').textContent = fmt(nCore);
       document.getElementById('nClad').textContent = fmt(nClad);
       document.getElementById('vop').textContent = Vop.toFixed(4);
       document.getElementById('b0').textContent = b0 === null ? '—' : b0.toFixed(4);
+      document.getElementById('neff').textContent = nEff === null ? '—' : nEff.toFixed(6);
       const badge = document.getElementById('singleBadge');
       badge.textContent = single ? 'YES (V < π/2)' : 'NO (multi mode)';
       badge.className = 'badge ' + (single ? 'good' : 'bad');
 
-      drawChart(Vop, eta, pol);
+      drawChart(Vop, etaTM, pol);
     }
 
     ['wl','d','delta'].forEach(id => {
