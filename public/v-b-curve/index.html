@@ -74,6 +74,16 @@
       font-variant-numeric: tabular-nums;
     }
     input[type=number]:focus { outline: none; border-color: var(--accent); }
+    select {
+      margin-top: 0.35rem;
+      padding: 0.55rem 0.75rem;
+      font-size: 1rem;
+      background: var(--input-bg);
+      color: var(--fg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+    }
+    select:focus { outline: none; border-color: var(--accent); }
     .results {
       display: grid;
       grid-template-columns: 1fr auto;
@@ -107,7 +117,7 @@
 <body>
   <a class="back" href="../">← Home</a>
   <h1>V-b Curve</h1>
-  <p class="subtitle">Symmetric step-index slab waveguide. Single-mode condition: V &lt; π/2.</p>
+  <p class="subtitle">Symmetric step-index slab waveguide, TE/TM modes. Single-mode condition: V &lt; π/2.</p>
 
   <div class="panel">
     <div class="form-grid">
@@ -123,6 +133,13 @@
         Δ <span class="unit">(%)</span>
         <input type="number" id="delta" value="0.75" step="0.05" min="0.001" max="50" />
       </label>
+      <label>
+        Polarization
+        <select id="pol">
+          <option value="TE" selected>TE</option>
+          <option value="TM">TM</option>
+        </select>
+      </label>
     </div>
   </div>
 
@@ -131,8 +148,8 @@
       <div class="key">n_core (from Δ)</div><div class="val" id="nCore">—</div>
       <div class="key">n_clad (silica, Sellmeier)</div><div class="val" id="nClad">—</div>
       <div class="key">V (operating)</div><div class="val" id="vop">—</div>
-      <div class="key">V cutoff (TE_1)</div><div class="val">π/2 ≈ 1.5708</div>
-      <div class="key">b (fundamental TE_0)</div><div class="val" id="b0">—</div>
+      <div class="key">V cutoff (<span id="cutoffModeLabel">TE</span>_1)</div><div class="val">π/2 ≈ 1.5708</div>
+      <div class="key">b (fundamental <span id="b0ModeLabel">TE</span>_0)</div><div class="val" id="b0">—</div>
       <div class="key">Single mode?</div><div class="val"><span id="singleBadge" class="badge">—</span></div>
     </div>
   </div>
@@ -149,7 +166,12 @@
     b = (n_eff² − n_clad²) / (n_core² − n_clad²) ∈ [0, 1]
   </div>
   <div class="formula">
-    Cutoff for TE_m: V_c = m·π/2.&nbsp; Single-mode region: <strong>V &lt; π/2</strong>.
+    Eigenvalue equation (u = κa, w = γa, u² + w² = V²):<br />
+    TE: even → u·tan(u) = w, odd → −u·cot(u) = w<br />
+    TM: even → u·tan(u) = (n_core/n_clad)²·w, odd → −u·cot(u) = (n_core/n_clad)²·w
+  </div>
+  <div class="formula">
+    Cutoff for mode m (TE and TM): V_c = m·π/2.&nbsp; Single-mode region: <strong>V &lt; π/2</strong>.
   </div>
 
   <h2>Reference implementations</h2>
@@ -168,7 +190,8 @@
       const l2=wl*wl;
       return Math.sqrt(1+B1*l2/(l2-C1)+B2*l2/(l2-C2)+B3*l2/(l2-C3));
     }
-    function bForMode(V, m) {
+    // eta = 1 for TE; eta = (n_core/n_clad)^2 for TM
+    function bForMode(V, m, eta = 1) {
       const Vc = m * Math.PI / 2;
       if (V <= Vc) return null;
       const even = (m % 2 === 0);
@@ -177,7 +200,7 @@
       if (uMax <= uMin) return null;
       const f = (u) => {
         const w = Math.sqrt(Math.max(V*V - u*u, 0));
-        return even ? (u * Math.tan(u) - w) : (-u / Math.tan(u) - w);
+        return even ? (u * Math.tan(u) - eta * w) : (-u / Math.tan(u) - eta * w);
       };
       let lo = uMin, hi = uMax;
       let flo = f(lo), fhi = f(hi);
@@ -203,7 +226,7 @@
     // --- chart ---
     const MODE_COLORS = ["#e03131", "#1971c2", "#2f9e44", "#f08c00"]; // red, blue, green, orange
 
-    function drawChart(Vop) {
+    function drawChart(Vop, eta, pol) {
       const canvas = document.getElementById('chart');
       const dpr = window.devicePixelRatio || 1;
       const cssW = canvas.clientWidth || 880;
@@ -302,7 +325,7 @@
         for (let i = 0; i <= N; i++) {
           const V = (i / N) * Vmax;
           if (V <= 0.01) continue;
-          const b = bForMode(V, m);
+          const b = bForMode(V, m, eta);
           if (b === null) { started = false; continue; }
           if (!started) { ctx.moveTo(xs(V), ys(b)); started = true; }
           else ctx.lineTo(xs(V), ys(b));
@@ -318,7 +341,7 @@
         ctx.fillStyle = MODE_COLORS[m];
         ctx.fillRect(legendX, legendY + m*16 - 8, 12, 3);
         ctx.fillStyle = fg;
-        ctx.fillText(`TE_${m}`, legendX + 18, legendY + m*16 - 2);
+        ctx.fillText(`${pol}_${m}`, legendX + 18, legendY + m*16 - 2);
       }
 
       // operating point marker
@@ -331,7 +354,7 @@
         ctx.lineTo(xs(Vop), margin.top + H);
         ctx.stroke();
         ctx.setLineDash([]);
-        const b0 = bForMode(Vop, 0);
+        const b0 = bForMode(Vop, 0, eta);
         if (b0 !== null) {
           ctx.fillStyle = '#000';
           ctx.beginPath();
@@ -349,6 +372,7 @@
       const wl = parseFloat(document.getElementById('wl').value);
       const d  = parseFloat(document.getElementById('d').value);
       const dl = parseFloat(document.getElementById('delta').value);
+      const pol = document.getElementById('pol').value;
       const fmt = (x) => Number.isFinite(x) ? x.toFixed(6) : '—';
 
       if (![wl, d, dl].every(Number.isFinite) || wl <= 0 || d <= 0 || dl <= 0) {
@@ -357,10 +381,13 @@
 
       const nClad = nSilica(wl);
       const nCore = nClad / (1 - dl/100);
+      const eta = pol === 'TM' ? (nCore / nClad) ** 2 : 1;
       const Vop = operatingV(wl, d, nCore, nClad);
-      const b0 = bForMode(Vop, 0);
+      const b0 = bForMode(Vop, 0, eta);
       const single = Vop < Math.PI / 2;
 
+      document.getElementById('cutoffModeLabel').textContent = pol;
+      document.getElementById('b0ModeLabel').textContent = pol;
       document.getElementById('nCore').textContent = fmt(nCore);
       document.getElementById('nClad').textContent = fmt(nClad);
       document.getElementById('vop').textContent = Vop.toFixed(4);
@@ -369,12 +396,13 @@
       badge.textContent = single ? 'YES (V < π/2)' : 'NO (multi mode)';
       badge.className = 'badge ' + (single ? 'good' : 'bad');
 
-      drawChart(Vop);
+      drawChart(Vop, eta, pol);
     }
 
     ['wl','d','delta'].forEach(id => {
       document.getElementById(id).addEventListener('input', compute);
     });
+    document.getElementById('pol').addEventListener('change', compute);
     window.addEventListener('resize', compute);
     compute();
   </script>
