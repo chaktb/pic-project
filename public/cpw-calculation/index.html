@@ -66,6 +66,12 @@ pre.results{font:11.5px/1.5 ui-monospace,"SF Mono",Menlo,monospace;
 .err{color:var(--red);font-size:12px;margin-top:8px;text-align:center}
 .row.wide{grid-template-columns:1fr 1fr;gap:12px}
 .row.wide label{white-space:nowrap}
+.theory p{color:var(--fg2);font-size:12.5px;line-height:1.55;margin:8px 0}
+.formula{background:var(--bg3);border-left:3px solid var(--blue);border-radius:7px;
+  padding:10px 12px;margin:8px 0;font-size:12.5px;line-height:1.55;color:var(--fg2)}
+.formula strong{color:var(--fg)}
+.note{color:var(--fg3);font-size:12px;line-height:1.5;margin-top:10px}
+.note a,.theory a{color:var(--blue);text-decoration:none}
 @media (min-width:720px){
   body{max-width:900px;margin:0 auto}
   .row{grid-template-columns:1.3fr 120px 50px}
@@ -87,6 +93,49 @@ pre.results{font:11.5px/1.5 ui-monospace,"SF Mono",Menlo,monospace;
 </section>
 
 <div id="plots"></div>
+
+<section class="theory">
+  <h2>◼ How it works</h2>
+  <p>The electrode is a <strong>coplanar waveguide (CPW)</strong>: a center signal line of width w with
+     two ground planes separated by gaps s, on a SiO₂ buffer over an X- or Z-cut LiNbO₃ substrate. The
+     microwave drive travels along this line as a <strong>traveling wave</strong> while the optical mode
+     co-propagates in a Ti-diffused waveguide beneath it. The model below is computed exactly as the
+     script runs.</p>
+  <div class="formula"><strong>1 · Quasi-static CPW.</strong> Conformal mapping gives the modulus
+     k = w/(w+2s), k′ = √(1−k²), and the line impedance
+     Z₀ = (30π/√ε_eff)·K(k′)/K(k), where K is the complete elliptic integral. A partial-fill factor
+     η = 1 − e<sup>−2t_ox/s</sup> blends buffer and substrate: ε_eff = ½[1 + η·ε_SiO₂ + (1−η)·ε_LN].
+     Then C = 1/(Z₀·v_p), L = Z₀/v_p, with v_p = c/√ε_eff.</div>
+  <div class="formula"><strong>2 · Frequency-dependent RLGC.</strong> Conductor loss follows the skin
+     effect, R(f) ∝ √(π·f·μ₀/σ)/(w+2t); dielectric loss G(f) = ω·C·[η·tanδ_SiO₂ + (1−η)·tanδ_LN].
+     The complex propagation constant and characteristic impedance are
+     γ = √[(R+jωL)(G+jωC)] and Z_c = √[(R+jωL)/(G+jωC)].</div>
+  <div class="formula"><strong>3 · S-parameters.</strong> The electrode is cast as an ABCD matrix
+     (A = D = cosh γℓ, B = Z_c·sinh γℓ, C = sinh γℓ/Z_c) and converted to S₁₁/S₂₁ referenced to the
+     50 Ω port. The RF attenuation is α = 8.686·Re(γ) dB/cm and the microwave index n_RF = c·Im(γ)/ω.</div>
+  <div class="formula"><strong>4 · Optical index.</strong> Bulk n_o and n_e of LiNbO₃ (and n of SiO₂)
+     come from Sellmeier equations; the Ti diffusion raises the core by Δn. A slab eigenvalue solver
+     returns the guided n_eff and group index n_g. <strong>TM</strong> uses n_e with r₃₃ (strong);
+     <strong>TE</strong> uses n_o with r₁₃ (weak).</div>
+  <div class="formula"><strong>5 · Velocity matching &amp; EO bandwidth.</strong> A velocity mismatch
+     Δβ = (ω/c)(n_RF − n_opt) causes walk-off between the microwave and optical waves. The traveling-wave
+     EO response is m(f) = |(1 − e<sup>−uℓ</sup>)/(uℓ)| with u = α + jΔβ. The −3 dB roll-off of m(f) sets
+     the modulation bandwidth; shrinking |n_RF − n_opt| and the loss α widens it.</div>
+  <div class="formula"><strong>6 · Half-wave voltage.</strong> Vπ = λ·g /(N·n³·r·Γ·L), with N = 2 for a
+     push-pull MZM (else 1), g the electrode gap, r the active EO coefficient, Γ the optical/RF overlap
+     and L the electrode length. The frequency-dependent value is Vπ(f) = Vπ_DC / m(f), so the EO
+     roll-off directly raises the drive voltage at high frequency.</div>
+  <p class="note">Design goal: low RF loss, Z_c near 50 Ω, and velocity matching (n_RF ≈ n_opt) together
+     maximize the EO bandwidth for a given Vπ·L product.</p>
+</section>
+
+<section class="theory">
+  <h2>◼ Reference implementations</h2>
+  <p class="note">
+    <a href="https://github.com/chaktb/pic-project/blob/main/cpw_modulator.py">cpw_modulator.py</a> &nbsp;·&nbsp;
+    <a href="https://github.com/chaktb/pic-project/blob/main/CPWModulator.java">CPWModulator.java</a>
+  </p>
+</section>
 
 <script>
 // =====================================================================

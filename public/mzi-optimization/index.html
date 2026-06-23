@@ -147,6 +147,45 @@
     <canvas id="chart"></canvas>
   </div>
 
+  <h2>How it works</h2>
+  <p style="color: var(--muted); margin-top: 0;">
+    This tool designs an <strong>asymmetric Mach–Zehnder interferometer (MZI)</strong>: two directional
+    couplers (DC1, DC2) joined by two arms whose optical path lengths differ by ΔL. Because the coupling
+    is wavelength dependent and the arm phase grows with 1/λ, the device acts as a wavelength filter —
+    for example a 980/1550 nm WDM coupler that routes one band to the bar port and the other to the cross port.
+  </p>
+  <div class="formula">
+    <strong>Bar-port transfer.</strong> With κ₁L₁ and κ₂L₂ the coupling angles of the two DCs and
+    Δφ = (2π·n_eff/λ)·ΔL the arm phase,
+    P_bar = |cos(κ₁L₁)·cos(κ₂L₂) − sin(κ₁L₁)·sin(κ₂L₂)·e<sup>jΔφ</sup>|²
+    = cos²(κ₁L₁)·cos²(κ₂L₂) + sin²(κ₁L₁)·sin²(κ₂L₂) − 2·cos(κ₁L₁)cos(κ₂L₂)·sin(κ₁L₁)sin(κ₂L₂)·cos Δφ.
+    The cross port carries P_cross = 1 − P_bar.
+  </div>
+  <div class="formula">
+    <strong>Coupling coefficient κ(λ).</strong> From coupled-mode theory for two identical slab
+    waveguides (effective-index method, TE–TE):
+    κ = 2·h²·γ·e<sup>−γg</sup> / [β·(h²+γ²)·(1+γa)], where h and γ are the lateral guided/evanescent
+    transverse wavenumbers, β = n_eff·k₀ the propagation constant, a = W/2, and g the coupler gap.
+    κ decays exponentially with gap and shifts with wavelength — the source of the spectral selectivity.
+  </div>
+  <div class="formula">
+    <strong>Index model.</strong> Cladding index from the Sellmeier equation (fused silica, Malitson 1965);
+    core n_core = n_clad/(1 − Δ/100). The fundamental slab mode solves u·tan u = w with u² + w² = V²,
+    V = k₀·(d/2)·√(n_core² − n_clad²), applied vertically (H) then horizontally (W) to give n_eff(λ).
+  </div>
+  <div class="formula">
+    <strong>Optimization.</strong> Minimize the weighted least-squares cost
+    C = Σᵢ wᵢ·(P_bar(λᵢ) − targetᵢ)² over the five variables (g₁, L₁, g₂, L₂, ΔL). A reproducible
+    multi-start Nelder–Mead search (Mulberry32 seeded RNG) explores the bounded parameter box; moves that
+    leave the bounds are clipped and lightly penalized. Each target row contributes one wavelength
+    constraint, so two rows (e.g. bar = 1 at 0.98 μm, bar = 0 at 1.55 μm) yield a WDM design.
+  </div>
+  <p style="color: var(--muted); font-size: 0.9rem;">
+    The response is wavelength selective because both κ(λ) and Δφ(λ) vary with λ. Feed any solution into
+    the forward <a href="../mzi/" style="color: var(--accent);">MZI Spectrum</a> tool to inspect its full
+    transmission curve.
+  </p>
+
   <h2>Reference implementations</h2>
   <p class="links">
     <a href="https://github.com/chaktb/pic-project/blob/main/mzi_optimize.py">mzi_optimize.py</a>
