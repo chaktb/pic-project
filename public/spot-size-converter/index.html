@@ -90,6 +90,19 @@
     ul { margin: 0.5rem 0; padding-left: 1.2rem; }
     li { margin: 0.3rem 0; }
     .note { color: var(--muted); font-size: 0.88rem; }
+    .restab { width: 100%; border-collapse: collapse; margin: 0.5rem 0 1rem; font-size: 0.92rem; }
+    .restab th, .restab td { text-align: left; padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--card-border); }
+    .restab th { color: var(--muted); font-weight: 600; }
+    .restab td:last-child { font-variant-numeric: tabular-nums; }
+    figure { margin: 1rem 0; }
+    figure img { width: 100%; height: auto; border: 1px solid var(--card-border); border-radius: 8px; background: #fff; }
+    figcaption { color: var(--muted); font-size: 0.85rem; margin-top: 0.4rem; }
+    ul.downloads { list-style: none; padding-left: 0; }
+    ul.downloads li { margin: 0.5rem 0; }
+    ul.downloads a { display: inline-block; font-weight: 600; color: var(--accent); text-decoration: none;
+                     border: 1px solid var(--card-border); border-radius: 8px; padding: 0.25rem 0.7rem;
+                     background: var(--input-bg); margin-right: 0.35rem; }
+    ul.downloads a:hover { background: var(--card-hover, var(--card-bg)); text-decoration: none; }
     footer { margin-top: 2rem; color: var(--muted); font-size: 0.85rem; text-align: center;
              border-top: 1px solid var(--card-border); padding-top: 1rem; }
   </style>
@@ -191,15 +204,42 @@ end
 %   or use a surrogate (Kriging) to cut BPM calls.</pre>
   </div>
 
-  <h2>Existing assets</h2>
+  <h2>GA optimization result @ 1301 nm</h2>
   <div class="panel">
-    <ul>
-      <li><code>silica_line_2%.ind</code> — 2% Δ silica BeamPROP setup (layer table, Sellmeier, monitor/launch).</li>
-      <li><code>seg_ssc_.m</code> — builds segment coordinates/widths, writes the .ind, runs BPM, parses loss (linear taper, fixed parameters).</li>
-      <li><code>silica_line_seg2.gds</code> — segmented SSC mask layout (~60 segment width/gap polygons).</li>
-      <li><code>Fiber_Mode.m00</code> / <code>mode_2%.m00</code> — launched SMF mode / waveguide mode field.</li>
+    <p>A pure-Python pipeline (<code>gdstk</code> segment generation → self-written split-step 3D BPM → genetic algorithm) was run for the target spec: chip waveguide <strong>4.5 µm × 4.5 µm solid</strong> on the left, <strong>8.5 µm-wide low-duty SMF facet</strong> on the right, thickness fixed at 4.5 µm. The GA freely tuned the pitch, number of segments, and the duty / width ramps.</p>
+    <table class="restab">
+      <tr><th>Quantity</th><th>Optimized value</th></tr>
+      <tr><td>Coupling loss @ 1301 nm (fine grid, dx = 0.15 µm)</td><td><strong>0.246 dB</strong> (η = 94.5 %)</td></tr>
+      <tr><td>Pitch / number of segments</td><td>5.43 µm / 72</td></tr>
+      <tr><td>Duty ramp (start → end)</td><td>0.91 → 0.21 &nbsp;(cosine profile)</td></tr>
+      <tr><td>Width ramp (start → end)</td><td>4.5 → 8.5 µm &nbsp;(linear)</td></tr>
+      <tr><td>Total device length</td><td>441 µm</td></tr>
+      <tr><td>Residual (non-radiated) power</td><td>0.965</td></tr>
+    </table>
+    <p class="note">The narrow solid end is a well-guided chip mode (2.7 µm); toward the wide low-duty end the sub-wavelength segments lower the effective index so the mode expands to ≈ 12.6 × 10.8 µm and matches the SMF-28 mode field (9.2 µm). Launch is done at the SMF facet and overlapped with the chip mode at the opposite facet (reciprocity ⇒ same as chip→SMF).</p>
+    <figure>
+      <img src="./ssc_result_summary.png" alt="GA-optimized SSC: geometry, duty/width ramp, top/side BPM field, and chip-facet output mode" loading="lazy" />
+      <figcaption>GA-optimized SSC — geometry, duty/width ramps, top & side |E|² propagation, and the clean single-mode chip-facet output.</figcaption>
+    </figure>
+    <figure>
+      <img src="./ssc_compare.png" alt="Uploaded reference segmented SSC vs GA-optimized" loading="lazy" />
+      <figcaption>Reference segmented SSC (measured 0.52 dB) vs. the GA-optimized geometry (0.41–0.25 dB depending on grid).</figcaption>
+    </figure>
+  </div>
+
+  <h2>Downloads</h2>
+  <div class="panel">
+    <p>Everything needed to reproduce the result above:</p>
+    <ul class="downloads">
+      <li><a href="./ssc_optimized.gds" download>ssc_optimized.gds</a> — GA-optimized mask layout (72 tapered segments, chip 4.5 µm → SMF facet 8.5 µm).</li>
+      <li><a href="./ssc_reference.gds" download>ssc_reference.gds</a> — the reference segmented SSC layout for comparison.</li>
+      <li><a href="./seg_ssc.py" download>seg_ssc.py</a> — segmented-SSC generator, 3D-BPM index field, evaluator, and the GA optimizer.</li>
+      <li><a href="./ssc_ga_optimizer.py" download>ssc_ga_optimizer.py</a> — platform constants (1301 nm silica Sellmeier), 3D-BPM evaluation, and the continuous-taper GA base.</li>
+      <li><a href="./run_taper_seg_ga.py" download>run_taper_seg_ga.py</a> — driver that fixes chip width = 4.5 µm / SMF-facet width = 8.5 µm and runs the GA.</li>
+      <li><a href="./ssc_result_summary.png" download>ssc_result_summary.png</a> — full result figure.</li>
+      <li><a href="./ssc_compare.png" download>ssc_compare.png</a> — reference vs. optimized comparison figure.</li>
     </ul>
-    <p class="note" style="margin-bottom:0;">To make it a GA: pull the fixed parameters of <code>seg_ssc_.m</code> out as arguments, wrap it as <code>eval_ssc(gene)</code>, and put a GA driver on top. First update the <code>.ind</code> and SMF-mode files to the target spec (1301 nm, 4.5×4.5 µm).</p>
+    <p class="note" style="margin-bottom:0;">Run with <code>python3 run_taper_seg_ga.py --pop 16 --gen 15 --seed 0</code> (needs <code>numpy</code>, <code>gdstk</code>, and <code>bpm3d.py</code>). Add <code>--fast</code> for a coarse-grid search; always re-validate the final candidate on the fine grid (dx ≤ 0.15 µm, window ≥ ±18 µm).</p>
   </div>
 
   <h2>Equations</h2>
@@ -221,7 +261,7 @@ end
     <a href="../mfd-coupling-loss/">MFD &amp; coupling loss tool →</a>
   </p>
 
-  <footer>Gaussian-overlap estimate in the browser; the design loop uses RSoft BeamPROP 3D BPM as the fitness evaluator.</footer>
+  <footer>Browser panel uses a Gaussian-overlap estimate; the reported 0.246 dB comes from a Python split-step 3D BPM (gdstk geometry) driven by the genetic algorithm in the downloads above.</footer>
 
   <script>
     // --- Malitson (1965) fused silica Sellmeier, wavelength in µm ---
