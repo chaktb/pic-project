@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PECVD Packing Density</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #ffffff;
+      --fg: #1a1a1a;
+      --muted: #666;
+      --card-bg: #f7f7f9;
+      --card-border: #e1e1e6;
+      --accent: #3b5bdb;
+      --input-bg: #ffffff;
+      --ge: #e8590c;
+      --si: #1971c2;
+      --good: #2f9e44;
+      --warn: #e03131;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0e0e10;
+        --fg: #e8e8ea;
+        --muted: #9a9aa3;
+        --card-bg: #1a1a1e;
+        --card-border: #2a2a30;
+        --accent: #748ffc;
+        --input-bg: #14141a;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0 auto; max-width: 920px; padding: 1.5rem;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg); color: var(--fg); line-height: 1.6;
+    }
+    .back { display: inline-block; margin-bottom: 1rem; color: var(--muted); text-decoration: none; }
+    .back:hover { text-decoration: underline; color: var(--accent); }
+    h1 { margin-bottom: 0.25rem; letter-spacing: -0.02em; }
+    h2 { margin-top: 2rem; letter-spacing: -0.01em; }
+    .subtitle { color: var(--muted); margin-top: 0; }
+    .panel {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0;
+    }
+    .panel h3 { margin-top: 0; }
+    .form-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;
+    }
+    label { display: flex; flex-direction: column; font-size: 0.9rem; color: var(--muted); }
+    label span.unit { font-size: 0.8rem; }
+    input[type=number] {
+      margin-top: 0.35rem; padding: 0.55rem 0.75rem; font-size: 1rem;
+      background: var(--input-bg); color: var(--fg); border: 1px solid var(--card-border);
+      border-radius: 8px; font-variant-numeric: tabular-nums;
+    }
+    input[type=number]:focus { outline: none; border-color: var(--accent); }
+    .results {
+      display: grid; grid-template-columns: 1fr auto;
+      gap: 0.4rem 1.5rem; font-variant-numeric: tabular-nums;
+    }
+    .results .key { color: var(--muted); }
+    .results .val { font-weight: 600; }
+    .results .val.primary { color: var(--accent); font-size: 1.15rem; }
+    .results .val.good { color: var(--good); }
+    .results .val.warn { color: var(--warn); }
+    .tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .tab {
+      padding: 0.5rem 1rem; border: 1px solid var(--card-border); border-radius: 8px;
+      background: var(--input-bg); color: var(--muted); cursor: pointer; font-size: 0.9rem;
+    }
+    .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .method { display: none; }
+    .method.active { display: block; }
+    canvas { width: 100%; display: block; background: var(--input-bg); border-radius: 8px; }
+    .links a { display: inline-block; margin-right: 1rem; color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+    .links a:hover { text-decoration: underline; }
+    .formula {
+      background: var(--card-bg); border-left: 3px solid var(--accent);
+      padding: 0.75rem 1rem; margin: 0.75rem 0; font-size: 0.9rem; overflow-x: auto;
+    }
+    .note { color: var(--muted); font-size: 0.85rem; margin-top: 0.5rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; font-variant-numeric: tabular-nums; }
+    th, td { padding: 0.4rem 0.6rem; text-align: right; border-bottom: 1px solid var(--card-border); }
+    th:first-child, td:first-child { text-align: left; }
+    th { color: var(--muted); font-weight: 600; }
+    footer { margin-top: 2rem; color: var(--muted); font-size: 0.85rem; text-align: center; }
+  </style>
+</head>
+<body>
+  <a class="back" href="../">← Home</a>
+  <h1>PECVD Packing Density</h1>
+  <p class="subtitle">Film packing density of PECVD Ge-doped SiO₂ (SiH₄ / N₂O / GeH₄) — from refractive index, density, or deposition conditions.</p>
+
+  <div class="panel">
+    <div class="tabs">
+      <div class="tab active" data-m="ll">A. Refractive index (Lorentz–Lorentz)</div>
+      <div class="tab" data-m="rho">B. Density ratio</div>
+      <div class="tab" data-m="dep">C. Deposition conditions</div>
+    </div>
+
+    <!-- Method A: Lorentz-Lorentz -->
+    <div class="method active" id="m-ll">
+      <div class="form-grid">
+        <label>Measured index n <span class="unit">(film @ λ)</span>
+          <input type="number" id="ll_n" value="1.448" step="0.001" min="1.0" max="2.0" /></label>
+        <label>GeO₂ mol fraction x <span class="unit">(0–1)</span>
+          <input type="number" id="ll_x" value="0.05" step="0.01" min="0" max="1" /></label>
+        <label>Wavelength <span class="unit">(μm)</span>
+          <input type="number" id="ll_wl" value="1.55" step="0.01" min="0.2" max="2.5" /></label>
+      </div>
+      <p class="note">Bulk index is the fused-SiO₂ / GeO₂ Sellmeier value (Fleck–Fleming) at λ, molar-averaged by x. Packing density solves the Lorentz–Lorentz relation for film vs. bulk molar refraction.</p>
+    </div>
+
+    <!-- Method B: Density ratio -->
+    <div class="method" id="m-rho">
+      <div class="form-grid">
+        <label>Film density ρ_film <span class="unit">(g/cm³)</span>
+          <input type="number" id="rho_f" value="2.15" step="0.01" min="0.5" max="6" /></label>
+        <label>GeO₂ mol fraction x <span class="unit">(0–1)</span>
+          <input type="number" id="rho_x" value="0.05" step="0.01" min="0" max="1" /></label>
+      </div>
+      <p class="note">Bulk density interpolated between fused SiO₂ (2.20 g/cm³) and GeO₂ glass (3.65 g/cm³) by mol fraction. p = ρ_film / ρ_bulk.</p>
+    </div>
+
+    <!-- Method C: Deposition conditions -->
+    <div class="method" id="m-dep">
+      <div class="form-grid">
+        <label>SiH₄ flow <span class="unit">(sccm)</span>
+          <input type="number" id="dep_sih4" value="20" step="1" min="0.1" /></label>
+        <label>N₂O flow <span class="unit">(sccm)</span>
+          <input type="number" id="dep_n2o" value="900" step="10" min="1" /></label>
+        <label>GeH₄ flow <span class="unit">(sccm)</span>
+          <input type="number" id="dep_geh4" value="5" step="0.5" min="0" /></label>
+        <label>Temperature <span class="unit">(°C)</span>
+          <input type="number" id="dep_T" value="300" step="10" min="100" max="500" /></label>
+        <label>Pressure <span class="unit">(Torr)</span>
+          <input type="number" id="dep_P" value="1.0" step="0.1" min="0.1" max="10" /></label>
+        <label>RF power <span class="unit">(W)</span>
+          <input type="number" id="dep_rf" value="150" step="10" min="10" /></label>
+      </div>
+      <p class="note">Empirical model: densification increases with T (Arrhenius, E_a≈0.15 eV), with N₂O/SiH₄ oxidant ratio (fuller oxidation → fewer voids/Si–H), and with ion energy (∝ RF/P). Ge incorporation from GeH₄/(SiH₄+GeH₄) is reported for reference. Calibrate constants to your tool.</p>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="results" id="out"></div>
+  </div>
+
+  <div class="panel">
+    <p style="color: var(--muted); margin-top: 0;">Packing density vs. the swept variable of the active method.</p>
+    <canvas id="chart" height="300"></canvas>
+  </div>
+
+  <h2>Equations</h2>
+  <div class="formula">
+    <b>Lorentz–Lorentz:</b>&nbsp; (n²−1)/(n²+2) = p · (n_bulk²−1)/(n_bulk²+2)&nbsp; ⟹&nbsp; p = R_film / R_bulk
+  </div>
+  <div class="formula">
+    <b>Density ratio:</b>&nbsp; p = ρ_film / ρ_bulk,&nbsp; ρ_bulk(x) = (1−x)·2.20 + x·3.65 &nbsp;[g/cm³]
+  </div>
+  <div class="formula">
+    <b>Deposition (empirical):</b>&nbsp; p = p₀ · f_T · f_ox · f_ion,&nbsp;
+    f_T = exp[−(E_a/k)(1/T − 1/T_ref)],&nbsp;
+    f_ox = 1 − A·exp(−r_ox/r₀),&nbsp; r_ox = N₂O/SiH₄,&nbsp;
+    f_ion = 1 + B·ln(1 + (RF/P)/S₀)
+  </div>
+  <div class="formula">
+    <b>Ge mol fraction (dep):</b>&nbsp; x_Ge ≈ η · GeH₄/(SiH₄+GeH₄),&nbsp; η≈0.6 (incorporation efficiency)
+  </div>
+
+  <div class="links">
+    <a href="./packing_density.py">packing_density.py</a>
+    <a href="./PackingDensity.java">PackingDensity.java</a>
+  </div>
+
+  <footer>PECVD Ge-doped SiO₂ packing density · client-side only · calibrate empirical constants to your reactor.</footer>
+
+  <script>
+    // ---- Sellmeier: fused silica (Malitson 1965) ----
+    function nSiO2(lum) {
+      const l2 = lum*lum;
+      const n2 = 1 + 0.6961663*l2/(l2-0.0684043**2)
+                   + 0.4079426*l2/(l2-0.1162414**2)
+                   + 0.8974794*l2/(l2-9.896161**2);
+      return Math.sqrt(n2);
+    }
+    // GeO2 glass Sellmeier (Fleming 1984)
+    function nGeO2(lum) {
+      const l2 = lum*lum;
+      const n2 = 1 + 0.80686642*l2/(l2-0.068972606**2)
+                   + 0.71815848*l2/(l2-0.15396605**2)
+                   + 0.85416831*l2/(l2-11.841931**2);
+      return Math.sqrt(n2);
+    }
+    function nBulk(x, lum) {
+      // molar (Lorentz-Lorentz) mixing of SiO2 and GeO2 bulk
+      const R = (n)=> (n*n-1)/(n*n+2);
+      const Rm = (1-x)*R(nSiO2(lum)) + x*R(nGeO2(lum));
+      return Math.sqrt((1+2*Rm)/(1-Rm));
+    }
+    const LL = (n)=> (n*n-1)/(n*n+2);
+
+    // ---- density bulk ----
+    const rhoBulk = (x)=> (1-x)*2.20 + x*3.65;
+
+    let method = 'll';
+    const out = document.getElementById('out');
+
+    function row(k,v,cls){ return `<div class="key">${k}</div><div class="val ${cls||''}">${v}</div>`; }
+    function pClass(p){ return p>=0.995 ? 'good' : (p<0.96 ? 'warn' : ''); }
+
+    function computeLL(n, x, wl){
+      const nb = nBulk(x, wl);
+      const p = LL(n)/LL(nb);
+      return { p, nb };
+    }
+    function computeRho(rf, x){
+      const rb = rhoBulk(x);
+      return { p: rf/rb, rb };
+    }
+    function computeDep(sih4, n2o, geh4, T, P, rf){
+      const p0 = 0.94, Ea = 0.15, k = 8.617e-5, Tref = 573.15; // 300C ref
+      const Tk = T + 273.15;
+      const fT = Math.exp(-(Ea/k)*(1/Tk - 1/Tref));
+      const rox = n2o/sih4;
+      const fox = 1 - 0.08*Math.exp(-rox/15);
+      const fion = 1 + 0.015*Math.log(1 + (rf/P)/150);
+      let p = p0*fT*fox*fion;
+      p = Math.min(p, 1.02);
+      const xGe = 0.6*geh4/(sih4+geh4);
+      return { p, fT, fox, fion, rox, xGe };
+    }
+
+    function compute(){
+      let series=[], xlabel='', title='', px, py=[];
+      if(method==='ll'){
+        const n=+ll_n.value, x=+ll_x.value, wl=+ll_wl.value;
+        const r=computeLL(n,x,wl);
+        out.innerHTML =
+          row('n_bulk (x, λ)', r.nb.toFixed(4)) +
+          row('R_film', LL(n).toFixed(5)) +
+          row('R_bulk', LL(r.nb).toFixed(5)) +
+          row('Packing density p', r.p.toFixed(4), 'primary '+pClass(r.p)) +
+          row('Void / deficit', ((1-r.p)*100).toFixed(2)+' %', pClass(r.p));
+        // sweep n
+        xlabel='Measured index n'; title='p vs n';
+        for(let nn=1.44; nn<=1.52; nn+=0.001){ series.push(nn); py.push(computeLL(nn,x,wl).p); }
+        px=n;
+      } else if(method==='rho'){
+        const rfd=+rho_f.value, x=+rho_x.value;
+        const r=computeRho(rfd,x);
+        out.innerHTML =
+          row('ρ_bulk (x)', r.rb.toFixed(3)+' g/cm³') +
+          row('ρ_film', rfd.toFixed(3)+' g/cm³') +
+          row('Packing density p', r.p.toFixed(4), 'primary '+pClass(r.p)) +
+          row('Void / deficit', ((1-r.p)*100).toFixed(2)+' %', pClass(r.p));
+        xlabel='ρ_film (g/cm³)'; title='p vs ρ_film';
+        for(let rr=1.9; rr<=2.35; rr+=0.005){ series.push(rr); py.push(computeRho(rr,x).p); }
+        px=rfd;
+      } else {
+        const sih4=+dep_sih4.value, n2o=+dep_n2o.value, geh4=+dep_geh4.value,
+              T=+dep_T.value, P=+dep_P.value, rf=+dep_rf.value;
+        const r=computeDep(sih4,n2o,geh4,T,P,rf);
+        out.innerHTML =
+          row('N₂O/SiH₄ ratio', r.rox.toFixed(1)) +
+          row('f_T (temperature)', r.fT.toFixed(4)) +
+          row('f_ox (oxidation)', r.fox.toFixed(4)) +
+          row('f_ion (ion energy)', r.fion.toFixed(4)) +
+          row('Ge mol fraction x', r.xGe.toFixed(4), 'good') +
+          row('Packing density p', r.p.toFixed(4), 'primary '+pClass(r.p)) +
+          row('Void / deficit', ((1-r.p)*100).toFixed(2)+' %', pClass(r.p));
+        xlabel='Temperature (°C)'; title='p vs deposition T';
+        for(let TT=150; TT<=450; TT+=5){ series.push(TT); py.push(computeDep(sih4,n2o,geh4,TT,P,rf).p); }
+        px=T;
+      }
+      drawChart(series, py, xlabel, title, px);
+    }
+
+    function drawChart(xs, ys, xlabel, title, xmark){
+      const c=document.getElementById('chart'), ctx=c.getContext('2d');
+      const dpr=window.devicePixelRatio||1;
+      const W=c.clientWidth, H=300;
+      c.width=W*dpr; c.height=H*dpr; ctx.scale(dpr,dpr);
+      ctx.clearRect(0,0,W,H);
+      const cs=getComputedStyle(document.documentElement);
+      const fg=cs.getPropertyValue('--fg'), muted=cs.getPropertyValue('--muted'),
+            acc=cs.getPropertyValue('--accent'), grid=cs.getPropertyValue('--card-border');
+      const m={l:56,r:16,t:24,b:40}, Wp=W-m.l-m.r, Hp=H-m.t-m.b;
+      const xmin=Math.min(...xs), xmax=Math.max(...xs);
+      let ymin=Math.min(...ys), ymax=Math.max(...ys);
+      const pad=(ymax-ymin)*0.1||0.01; ymin-=pad; ymax+=pad;
+      const X=v=>m.l+(v-xmin)/(xmax-xmin)*Wp;
+      const Y=v=>m.t+(1-(v-ymin)/(ymax-ymin))*Hp;
+      // grid + axes
+      ctx.strokeStyle=grid; ctx.lineWidth=1; ctx.fillStyle=muted;
+      ctx.font='11px -apple-system, sans-serif';
+      for(let i=0;i<=5;i++){ const yy=m.t+i*Hp/5, val=ymax-(ymax-ymin)*i/5;
+        ctx.beginPath(); ctx.moveTo(m.l,yy); ctx.lineTo(m.l+Wp,yy); ctx.stroke();
+        ctx.textAlign='right'; ctx.fillText(val.toFixed(3), m.l-6, yy+3); }
+      for(let i=0;i<=5;i++){ const xx=m.l+i*Wp/5, val=xmin+(xmax-xmin)*i/5;
+        ctx.textAlign='center'; ctx.fillText(val.toFixed( (xmax-xmin)>50?0:2 ), xx, m.t+Hp+16); }
+      ctx.textAlign='center'; ctx.fillText(xlabel, m.l+Wp/2, H-6);
+      ctx.save(); ctx.translate(14,m.t+Hp/2); ctx.rotate(-Math.PI/2);
+      ctx.fillText('Packing density p', 0, 0); ctx.restore();
+      // p=1 reference
+      if(1>=ymin && 1<=ymax){ ctx.strokeStyle=muted; ctx.setLineDash([4,3]);
+        ctx.beginPath(); ctx.moveTo(m.l,Y(1)); ctx.lineTo(m.l+Wp,Y(1)); ctx.stroke(); ctx.setLineDash([]);
+        ctx.textAlign='left'; ctx.fillText('p = 1 (fully dense)', m.l+4, Y(1)-4); }
+      // curve
+      ctx.strokeStyle=acc; ctx.lineWidth=2; ctx.beginPath();
+      xs.forEach((x,i)=>{ const px=X(x),py=Y(ys[i]); i?ctx.lineTo(px,py):ctx.moveTo(px,py); });
+      ctx.stroke();
+      // current marker
+      const yi=ys[xs.reduce((b,x,i)=>Math.abs(x-xmark)<Math.abs(xs[b]-xmark)?i:b,0)];
+      ctx.fillStyle=acc; ctx.beginPath(); ctx.arc(X(xmark),Y(yi),4,0,2*Math.PI); ctx.fill();
+    }
+
+    document.querySelectorAll('.tab').forEach(t=>{
+      t.addEventListener('click',()=>{
+        document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+        document.querySelectorAll('.method').forEach(x=>x.classList.remove('active'));
+        t.classList.add('active');
+        method=t.dataset.m;
+        document.getElementById('m-'+method).classList.add('active');
+        compute();
+      });
+    });
+    ['ll_n','ll_x','ll_wl','rho_f','rho_x','dep_sih4','dep_n2o','dep_geh4','dep_T','dep_P','dep_rf']
+      .forEach(id=>document.getElementById(id).addEventListener('input',compute));
+    window.addEventListener('resize',compute);
+    compute();
+  </script>
+</body>
+</html>
