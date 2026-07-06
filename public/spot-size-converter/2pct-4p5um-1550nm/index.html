@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Segmented Spot Size Converter @ 1550 nm (GA + 3D BPM)</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #ffffff;
+      --fg: #1a1a1a;
+      --muted: #666;
+      --card-bg: #f7f7f9;
+      --card-border: #e1e1e6;
+      --accent: #3b5bdb;
+      --input-bg: #ffffff;
+      --good: #2f9e44;
+      --warn: #f08c00;
+      --bad: #e03131;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0e0e10;
+        --fg: #e8e8ea;
+        --muted: #9a9aa3;
+        --card-bg: #1a1a1e;
+        --card-border: #2a2a30;
+        --accent: #748ffc;
+        --input-bg: #14141a;
+        --good: #51cf66;
+        --warn: #ffa94d;
+        --bad: #ff6b6b;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0 auto; max-width: 920px; padding: 1.5rem;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg); color: var(--fg); line-height: 1.6;
+    }
+    .back { display: inline-block; margin-bottom: 1rem; color: var(--muted); text-decoration: none; }
+    .back:hover { text-decoration: underline; color: var(--accent); }
+    h1 { margin-bottom: 0.25rem; letter-spacing: -0.02em; }
+    h2 { margin-top: 2rem; letter-spacing: -0.01em; }
+    .subtitle { color: var(--muted); margin-top: 0; }
+    .panel {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0;
+    }
+    .panel h3 { margin-top: 0; }
+    .form-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;
+    }
+    label { display: flex; flex-direction: column; font-size: 0.9rem; color: var(--muted); }
+    label span.unit { font-size: 0.8rem; }
+    input[type=number] {
+      margin-top: 0.35rem; padding: 0.55rem 0.75rem; font-size: 1rem;
+      background: var(--input-bg); color: var(--fg); border: 1px solid var(--card-border);
+      border-radius: 8px; font-variant-numeric: tabular-nums;
+    }
+    input[type=number]:focus { outline: none; border-color: var(--accent); }
+    .results {
+      display: grid; grid-template-columns: 1fr auto;
+      gap: 0.4rem 1.5rem; font-variant-numeric: tabular-nums;
+    }
+    .results .key { color: var(--muted); }
+    .results .val { font-weight: 600; }
+    .results .val.primary { color: var(--accent); font-size: 1.1rem; }
+    .badge {
+      display: inline-block; padding: 0.25rem 0.6rem; border-radius: 6px;
+      font-weight: 600; font-size: 0.85rem;
+    }
+    .badge.good { background: rgba(47, 158, 68, 0.15); color: var(--good); }
+    .badge.warn { background: rgba(240, 140, 0, 0.15); color: var(--warn); }
+    .badge.bad  { background: rgba(224, 49, 49, 0.15); color: var(--bad); }
+    canvas { width: 100%; height: 220px; display: block; background: var(--input-bg); border-radius: 8px; }
+    .links a { display: inline-block; margin-right: 1rem; color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+    .links a:hover { text-decoration: underline; }
+    .formula {
+      background: var(--card-bg); border-left: 3px solid var(--accent);
+      padding: 0.75rem 1rem; margin: 0.75rem 0; font-size: 0.9rem;
+      overflow-x: auto;
+    }
+    table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.92rem; }
+    th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--card-border); vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; }
+    code { background: var(--card-bg); padding: 0.1rem 0.35rem; border-radius: 4px; font-size: 0.88em; }
+    pre { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px;
+          padding: 1rem; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+    ul { margin: 0.5rem 0; padding-left: 1.2rem; }
+    li { margin: 0.3rem 0; }
+    .note { color: var(--muted); font-size: 0.88rem; }
+    .restab { width: 100%; border-collapse: collapse; margin: 0.5rem 0 1rem; font-size: 0.92rem; }
+    .restab th, .restab td { text-align: left; padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--card-border); }
+    .restab th { color: var(--muted); font-weight: 600; }
+    .restab td:last-child { font-variant-numeric: tabular-nums; }
+    figure { margin: 1rem 0; }
+    figure img { width: 100%; height: auto; border: 1px solid var(--card-border); border-radius: 8px; background: #fff; }
+    figcaption { color: var(--muted); font-size: 0.85rem; margin-top: 0.4rem; }
+    ul.downloads { list-style: none; padding-left: 0; }
+    ul.downloads li { margin: 0.5rem 0; }
+    ul.downloads a { display: inline-block; font-weight: 600; color: var(--accent); text-decoration: none;
+                     border: 1px solid var(--card-border); border-radius: 8px; padding: 0.25rem 0.7rem;
+                     background: var(--input-bg); margin-right: 0.35rem; }
+    ul.downloads a:hover { background: var(--card-hover, var(--card-bg)); text-decoration: none; }
+    footer { margin-top: 2rem; color: var(--muted); font-size: 0.85rem; text-align: center;
+             border-top: 1px solid var(--card-border); padding-top: 1rem; }
+  </style>
+</head>
+<body>
+  <a class="back" href="../">← SSC (spot size converter)</a>
+  <h1>2% 4.5 µm × 4.5 µm SSC @ 1550 nm</h1>
+  <p class="subtitle">2% Δ silica channel waveguide (4.5×4.5 µm) ↔ SMF-28 at 1550 nm — segment width/duty optimized with a genetic algorithm driving a 3D BPM loss evaluation.</p>
+
+  <div class="panel">
+    <h3>Target &amp; SMF parameters</h3>
+    <div class="form-grid">
+      <label>Wavelength <span class="unit">(µm)</span>
+        <input type="number" id="wl" value="1.550" step="0.001" min="0.6" max="2.0" /></label>
+      <label>SMF MFD <span class="unit">(µm)</span>
+        <input type="number" id="mfd" value="10.4" step="0.1" min="1" /></label>
+      <label>WG width W <span class="unit">(µm)</span>
+        <input type="number" id="W" value="4.5" step="0.1" min="0.5" /></label>
+      <label>WG height H <span class="unit">(µm)</span>
+        <input type="number" id="H" value="4.5" step="0.1" min="0.5" /></label>
+      <label>Δ <span class="unit">(%)</span>
+        <input type="number" id="delta" value="2.0" step="0.05" min="0.01" max="50" /></label>
+      <label>Expanded MFD (SSC out) <span class="unit">(µm)</span>
+        <input type="number" id="mfdE" value="8.5" step="0.1" min="1" /></label>
+    </div>
+    <p class="note" style="margin-bottom:0;">SMF-28 MFD is ≈ 10.4 µm at 1550 nm (vs ≈ 9.2 µm at 1310 nm). The last field is the mode-field diameter the SSC tip presents to the SMF (a design target the GA searches for). Set it equal to the bare WG MFD to see the loss <em>without</em> a converter.</p>
+  </div>
+
+  <div class="panel">
+    <div class="results">
+      <div class="key">n_core (from Δ)</div><div class="val" id="nCore">—</div>
+      <div class="key">n_clad (silica, Sellmeier)</div><div class="val" id="nClad">—</div>
+      <div class="key">Bare WG mode field diameter (D4σ)</div><div class="val" id="wgMfd">—</div>
+      <div class="key">Coupling loss — bare WG ↔ SMF</div><div class="val" id="lossBare">—</div>
+      <div class="key">Coupling loss — SSC tip ↔ SMF</div><div class="val primary" id="lossSsc">—</div>
+      <div class="key">Improvement</div><div class="val" id="improve">—</div>
+      <div class="key">SSC quality</div><div class="val"><span id="qBadge" class="badge">—</span></div>
+    </div>
+    <p class="note" style="margin:0.9rem 0 0;">Gaussian–Gaussian overlap model for a quick estimate; the real design objective is the 3D-BPM output power below.</p>
+  </div>
+
+  <div class="panel">
+    <p class="note" style="margin-top:0;">
+      Mode field cross-section — blue: SMF Gaussian, red dashed: bare WG mode, green: expanded SSC-tip mode. Larger overlap with the SMF means lower loss.
+    </p>
+    <canvas id="chart"></canvas>
+  </div>
+
+  <h2>Why a spot size converter</h2>
+  <div class="panel">
+    <ul>
+      <li>The SMF-28 mode-field diameter grows to ~<strong>10.4 µm</strong> at 1550 nm, while a 2% Δ, 4.5×4.5 µm silica waveguide guides a much smaller mode — the <strong>mode-size mismatch</strong> is the dominant butt-coupling loss.</li>
+      <li>At the longer 1550 nm wavelength both the SMF mode and the waveguide mode are larger than at 1310 nm, so the raw mismatch (and the residual SSC loss) is somewhat higher than the 1301 nm design.</li>
+      <li>Expanding the waveguide-end spot to approach the SMF mode maximizes the overlap integral and cuts the loss.</li>
+      <li>A <strong>segmented (periodically broken) taper</strong> uses sub-/near-wavelength duty modulation to lower the local effective index gradually, expanding the mode adiabatically in a shorter length than a plain linear taper — and it respects mask minimum-linewidth rules.</li>
+      <li>Target: SMF coupling insertion loss <strong>&lt; 0.35 dB</strong> at 1550 nm, with polarization and wavelength insensitivity.</li>
+    </ul>
+  </div>
+
+  <h2>Structure &amp; design variables</h2>
+  <div class="panel">
+    <p style="margin-top:0;">The segment list is generated from a small parameter vector; the GA treats that vector as the gene.</p>
+    <table>
+      <tr><th>Variable</th><th>Meaning</th><th>Search range (example)</th></tr>
+      <tr><td><code>pitch</code></td><td>Segment period (fixed along the device)</td><td>3.0 – 8.0 µm</td></tr>
+      <tr><td><code>n_seg</code></td><td>Number of dashed segments</td><td>35 – 100</td></tr>
+      <tr><td><code>duty_start / duty_end</code></td><td>Duty (fill / pitch) at the chip / SMF end</td><td>0.75–0.98 → 0.10–0.40</td></tr>
+      <tr><td><code>w_start / w_end</code></td><td>Segment width at chip (solid) / SMF facet</td><td>4.5 µm → 8.5 µm (fixed)</td></tr>
+      <tr><td><code>duty_profile</code></td><td>Duty ramp shape</td><td>linear / quad / cos</td></tr>
+      <tr><td><code>width_profile</code></td><td>Width ramp shape</td><td>linear / quad / cos</td></tr>
+    </table>
+    <p class="note" style="margin-bottom:0;">Duty violating the mask minimum linewidth / gap (e.g. 0.5 µm) is clipped or penalized in the fitness function.</p>
+  </div>
+
+  <h2>Optimization workflow (GA ⇄ 3D BPM)</h2>
+  <div class="panel">
+    <ul>
+      <li><strong>① gene → structure</strong>: the parameter vector builds the segment list (begin.z, width, duty) and the 3D-BPM index field <code>n(x,y;z)</code>.</li>
+      <li><strong>② 3D BPM run</strong>: launch the SMF-28 Gaussian at the wide low-duty facet, propagate, overlap the output at the chip facet with the guided chip mode.</li>
+      <li><strong>③ fitness</strong>: <code>Loss = −10·log10(η)</code> [dB]; the GA minimizes loss. Robustness is checked over polarization and wavelength (1530 / 1550 / 1570 nm).</li>
+      <li><strong>④ select · cross · mutate</strong>: tournament selection + real-coded crossover + Gaussian mutation; constraint violations penalized.</li>
+      <li><strong>⑤ iterate</strong>: stop when the best loss stalls for K generations.</li>
+    </ul>
+    <div class="formula">
+      Objective: minimize &nbsp; f(g) = mean<sub>λ, pol</sub> [ −10·log₁₀ η(g) ] + penalty(g)
+    </div>
+    <pre>% Fitness (pseudocode)
+function loss = eval_ssc(gene)
+    idx  = build_index_field(gene);        % (1) gene -> n(x,y;z)
+    psi  = bpm3d_propagate(idx, smf_mode); % (2) launch SMF Gaussian, propagate
+    eta  = overlap(psi_out, chip_mode);    %     mode overlap at chip facet
+    loss = -10*log10(eta);                 % (3) dB, smaller is better
+    loss = loss + penalty(gene);           % min-linewidth / gap penalty
+end
+% GA driver: tournament select + real-coded crossover + Gaussian mutation.
+% BPM is expensive -> search on a coarse grid, re-validate the winner on a fine grid.</pre>
+  </div>
+
+  <h2>GA optimization result @ 1550 nm</h2>
+  <div class="panel">
+    <p>A pure-Python pipeline (<code>gdstk</code> segment generation → self-written split-step 3D BPM → genetic algorithm) was run for the target spec: chip waveguide <strong>4.5 µm × 4.5 µm solid</strong> on the left, <strong>8.5 µm-wide low-duty SMF facet</strong> on the right, thickness fixed at 4.5 µm, at <strong>1550 nm</strong> on the 2% Δ silica platform. The GA freely tuned the pitch, number of segments, and the duty / width ramps. A 6-seed / two-facet-width sweep confirmed the design below as the lowest-loss condition.</p>
+    <table class="restab">
+      <tr><th>Quantity</th><th>Optimized value</th></tr>
+      <tr><td>Coupling loss @ 1550 nm (fine grid, dx = 0.15 µm)</td><td><strong>0.326 dB</strong> (η = 92.8 %)</td></tr>
+      <tr><td>Pitch / number of segments</td><td>4.60 µm / 62</td></tr>
+      <tr><td>Duty ramp (chip → SMF end)</td><td>0.77 → 0.19 &nbsp;(cosine profile)</td></tr>
+      <tr><td>Width ramp (chip → SMF end)</td><td>4.5 → 8.5 µm &nbsp;(linear)</td></tr>
+      <tr><td>Total device length</td><td>335 µm</td></tr>
+      <tr><td>Residual (non-radiated) power</td><td>0.969</td></tr>
+      <tr><td>Reference segmented SSC (un-optimized)</td><td>0.542 dB (η = 88.3 %)</td></tr>
+    </table>
+    <p class="note">The narrow solid end is a well-guided chip mode; toward the wide low-duty end the sub-wavelength segments lower the effective index so the mode expands to match the SMF-28 mode field (≈ 10.4 µm at 1550 nm). Launch is done at the SMF facet and overlapped with the chip mode at the opposite facet (reciprocity ⇒ same as chip→SMF). The GA cut the coupling loss from 0.542 dB (reference) to <strong>0.326 dB</strong>, a 0.22 dB improvement.</p>
+    <figure>
+      <img src="./ssc_result_summary.png" alt="GA-optimized 1550 nm SSC: duty/width ramp, top/side BPM field, and chip-facet output mode" loading="lazy" />
+      <figcaption>GA-optimized SSC @ 1550 nm — duty &amp; width ramps, top &amp; side |E|² propagation, and the clean single-mode chip-facet output.</figcaption>
+    </figure>
+    <figure>
+      <img src="./ssc_compare.png" alt="Reference segmented SSC vs GA-optimized at 1550 nm" loading="lazy" />
+      <figcaption>Reference segmented SSC (0.542 dB) vs. the GA-optimized geometry (0.326 dB) at 1550 nm.</figcaption>
+    </figure>
+  </div>
+
+  <h2>Downloads</h2>
+  <div class="panel">
+    <p>Everything needed to reproduce the result above:</p>
+    <ul class="downloads">
+      <li><a href="./ssc_optimized.gds" download>ssc_optimized.gds</a> — GA-optimized mask layout (62 tapered segments, chip 4.5 µm → SMF facet 8.5 µm).</li>
+      <li><a href="./ssc_reference.gds" download>ssc_reference.gds</a> — the reference segmented SSC layout for comparison.</li>
+      <li><a href="./seg_ssc.py" download>seg_ssc.py</a> — segmented-SSC generator, 3D-BPM index field, evaluator, and the GA optimizer.</li>
+      <li><a href="./ssc_ga_optimizer.py" download>ssc_ga_optimizer.py</a> — platform constants (silica Sellmeier), 3D-BPM evaluation, and the continuous-taper GA base.</li>
+      <li><a href="./run_seg_ga_1550.py" download>run_seg_ga_1550.py</a> — 1550 nm driver: fixes chip width = 4.5 µm / SMF-facet width = 8.5 µm, runs the GA, re-validates on the fine grid, and writes the GDS + figures.</li>
+      <li><a href="./ssc_result_summary.png" download>ssc_result_summary.png</a> — full result figure.</li>
+      <li><a href="./ssc_compare.png" download>ssc_compare.png</a> — reference vs. optimized comparison figure.</li>
+    </ul>
+    <p class="note" style="margin-bottom:0;">Run with <code>python3 run_seg_ga_1550.py --pop 18 --gen 14 --seed 0 --out .</code> (needs <code>numpy</code>, <code>gdstk</code>, <code>matplotlib</code>, and <code>bpm3d.py</code>). The GA searches on a coarse grid; the final candidate is always re-validated on the fine grid (dx ≤ 0.15 µm, window ≥ ±18 µm).</p>
+  </div>
+
+  <h2>Equations</h2>
+  <div class="formula">
+    SMF mode (Gaussian): E_SMF(r) = exp(−r²/w²), &nbsp; w = MFD/2
+  </div>
+  <div class="formula">
+    Overlap: η = (∫ E_a·E_b dA)² / (∫E_a² dA · ∫E_b² dA), &nbsp;&nbsp; Loss(dB) = −10·log₁₀(η)
+  </div>
+  <div class="formula">
+    Index from Δ: n_core = n_clad / √(1 − 2Δ), &nbsp; n_clad from the Malitson silica Sellmeier model.
+  </div>
+
+  <h2>Reference implementations</h2>
+  <p class="links">
+    <a href="https://github.com/chaktb/pic-project/blob/main/coupling_loss.py">coupling_loss.py</a>
+    <a href="https://github.com/chaktb/pic-project/blob/main/mfd_coupling.py">mfd_coupling.py</a>
+    <a href="../coupling-loss/">Coupling loss tool →</a>
+    <a href="../mfd-coupling-loss/">MFD &amp; coupling loss tool →</a>
+  </p>
+
+  <footer>Browser panel uses a Gaussian-overlap estimate; the reported 0.326 dB comes from a Python split-step 3D BPM (gdstk geometry) driven by the genetic algorithm in the downloads above.</footer>
+
+  <script>
+    // --- Malitson (1965) fused silica Sellmeier, wavelength in µm ---
+    function nSilica(wl) {
+      const B1=0.6961663,B2=0.4079426,B3=0.8974794;
+      const C1=0.0684043**2,C2=0.1162414**2,C3=9.896161**2;
+      const l2=wl*wl;
+      return Math.sqrt(1+B1*l2/(l2-C1)+B2*l2/(l2-C2)+B3*l2/(l2-C3));
+    }
+
+    // Symmetric-slab fundamental TE mode -> {kappa, gamma, nEff, a}
+    function slabFundamentalTE(wl, d, nCore, nClad) {
+      if (nCore <= nClad) return null;
+      const k0 = 2*Math.PI/wl, a = d/2;
+      const V = k0*a*Math.sqrt(nCore*nCore - nClad*nClad);
+      if (V <= 0) return null;
+      const upper = Math.min(Math.PI/2 - 1e-9, V - 1e-12);
+      if (upper <= 0) return null;
+      const f = (u) => {
+        const w = Math.sqrt(Math.max(V*V - u*u, 0));
+        return u*Math.tan(u) - w;
+      };
+      let lo = 1e-9, hi = upper, flo = f(lo);
+      for (let i = 0; i < 100; i++) {
+        const mid = 0.5*(lo+hi), fmid = f(mid);
+        if (flo*fmid <= 0) { hi = mid; }
+        else { lo = mid; flo = fmid; }
+        if (hi - lo < 1e-13) break;
+      }
+      const u = 0.5*(lo+hi);
+      const w = Math.sqrt(Math.max(V*V - u*u, 0));
+      const kappa = u/a, gamma = w/a;
+      const nEff = Math.sqrt(nCore*nCore - (kappa/k0)**2);
+      return { kappa, gamma, nEff, a };
+    }
+
+    function slabField(r, k, g, a) {
+      if (Math.abs(r) <= a) return Math.cos(k*r);
+      return Math.cos(k*a) * Math.exp(-g*(Math.abs(r) - a));
+    }
+    const gauss = (r, w) => Math.exp(-(r*r)/(w*w));
+
+    function integrateTrap(f, lo, hi, N) {
+      const h = (hi-lo)/N;
+      let s = 0.5*(f(lo) + f(hi));
+      for (let i = 1; i < N; i++) s += f(lo + i*h);
+      return s * h;
+    }
+
+    // 1-D overlap efficiency between two field functions on [-L,L]
+    function overlap1D(Fa, Fb, L, N) {
+      const num = integrateTrap(r => Fa(r)*Fb(r), -L, L, N);
+      const da  = integrateTrap(r => Fa(r)**2, -L, L, N);
+      const db  = integrateTrap(r => Fb(r)**2, -L, L, N);
+      return (num*num)/(da*db);
+    }
+
+    // D4sigma mode-field diameter of a slab field (2nd moment)
+    function d4sigma(Ffn, L, N) {
+      const num = integrateTrap(r => r*r*Ffn(r)**2, -L, L, N);
+      const den = integrateTrap(r => Ffn(r)**2, -L, L, N);
+      const sigma = Math.sqrt(num/den);
+      return 4*sigma; // D4sigma
+    }
+
+    function compute() {
+      const wl   = parseFloat(document.getElementById('wl').value);
+      const mfd  = parseFloat(document.getElementById('mfd').value);
+      const W    = parseFloat(document.getElementById('W').value);
+      const H    = parseFloat(document.getElementById('H').value);
+      const dl   = parseFloat(document.getElementById('delta').value);
+      const mfdE = parseFloat(document.getElementById('mfdE').value);
+
+      if (![wl,mfd,W,H,dl,mfdE].every(Number.isFinite) ||
+          wl<=0 || mfd<=0 || W<=0 || H<=0 || dl<=0 || mfdE<=0) return;
+
+      const nClad = nSilica(wl);
+      const nCore = nClad / Math.sqrt(1 - 2*dl/100);
+      document.getElementById('nCore').textContent = nCore.toFixed(6);
+      document.getElementById('nClad').textContent = nClad.toFixed(6);
+
+      const vmode = slabFundamentalTE(wl, H, nCore, nClad);
+      const hmode = slabFundamentalTE(wl, W, nCore, nClad);
+      if (!vmode || !hmode) { setNoMode(); return; }
+
+      const wSmf = mfd/2, wE = mfdE/2;
+      const L = Math.max(6*wSmf, 6*W, 6*H, 6*wE);
+      const N = 4000;
+
+      const Xfn = (x) => slabField(x, hmode.kappa, hmode.gamma, hmode.a);
+      const Yfn = (y) => slabField(y, vmode.kappa, vmode.gamma, vmode.a);
+
+      // Bare WG <-> SMF (separable: eta = eta_x * eta_y)
+      const etaBareX = overlap1D(x => gauss(x, wSmf), Xfn, L, N);
+      const etaBareY = overlap1D(y => gauss(y, wSmf), Yfn, L, N);
+      const etaBare = etaBareX * etaBareY;
+      const lossBare = -10*Math.log10(etaBare);
+
+      // Bare WG mode field diameter (geometric mean of x/y D4sigma)
+      const wgMfd = Math.sqrt(d4sigma(Xfn, L, N) * d4sigma(Yfn, L, N));
+
+      // SSC tip modeled as an expanded Gaussian (target MFD) <-> SMF
+      const etaSsc = overlap1D(r => gauss(r, wSmf), r => gauss(r, wE), L, N)**1; // radial-symmetric -> single factor
+      const lossSsc = -10*Math.log10(etaSsc);
+
+      document.getElementById('wgMfd').textContent  = wgMfd.toFixed(2) + ' µm';
+      document.getElementById('lossBare').textContent = lossBare.toFixed(3) + ' dB';
+      document.getElementById('lossSsc').textContent  = lossSsc.toFixed(3) + ' dB';
+      const gain = lossBare - lossSsc;
+      document.getElementById('improve').textContent = (gain>=0?'−':'+') + Math.abs(gain).toFixed(3) + ' dB';
+
+      const badge = document.getElementById('qBadge');
+      if (lossSsc < 0.35)     { badge.className = 'badge good'; badge.textContent = 'Target met (<0.35 dB)'; }
+      else if (lossSsc < 1.0) { badge.className = 'badge warn'; badge.textContent = 'Close (<1 dB)'; }
+      else                    { badge.className = 'badge bad';  badge.textContent = 'Needs work'; }
+
+      drawProfile(wSmf, Xfn, wE, W, L);
+    }
+
+    function setNoMode() {
+      ['wgMfd','lossBare','lossSsc','improve'].forEach(id => document.getElementById(id).textContent = 'no mode');
+      const badge = document.getElementById('qBadge');
+      badge.className = 'badge bad'; badge.textContent = 'No guided mode';
+    }
+
+    function drawProfile(wSmf, Ffn, wE, coreWidth, L) {
+      const canvas = document.getElementById('chart');
+      const dpr = window.devicePixelRatio || 1;
+      const cssW = canvas.clientWidth || 800;
+      const cssH = 220;
+      canvas.width = cssW*dpr; canvas.height = cssH*dpr;
+      canvas.style.height = cssH + 'px';
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(1,0,0,1,0,0);
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0,0,cssW,cssH);
+
+      const muted = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim();
+      const border = getComputedStyle(document.documentElement).getPropertyValue('--card-border').trim();
+
+      const margin = { l: 40, r: 12, t: 16, b: 28 };
+      const Wp = cssW - margin.l - margin.r;
+      const Hp = cssH - margin.t - margin.b;
+
+      const xRange = Math.min(L, 4*Math.max(wSmf, coreWidth, wE));
+      const xs = (r) => margin.l + ((r + xRange)/(2*xRange))*Wp;
+      const ys = (v) => margin.t + (1 - v)*Hp;
+
+      // Core box
+      const a = coreWidth/2;
+      ctx.fillStyle = 'rgba(128,128,128,0.12)';
+      ctx.fillRect(xs(-a), margin.t, xs(a)-xs(-a), Hp);
+
+      // Axis
+      ctx.strokeStyle = border; ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(margin.l, margin.t + Hp); ctx.lineTo(margin.l + Wp, margin.t + Hp);
+      ctx.stroke();
+      ctx.fillStyle = muted; ctx.font = '11px -apple-system, sans-serif';
+      [-xRange, -xRange/2, 0, xRange/2, xRange].forEach(t => {
+        ctx.fillText(t.toFixed(1), xs(t) - 8, margin.t + Hp + 14);
+      });
+      ctx.fillText('µm', margin.l + Wp - 14, margin.t + Hp + 14);
+
+      const N = 300;
+      function plot(fn, color, dash, norm) {
+        const vals = [];
+        for (let i = 0; i <= N; i++) vals.push(fn(-xRange + (2*xRange)*i/N));
+        const m = norm || Math.max(...vals.map(Math.abs));
+        ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.setLineDash(dash);
+        ctx.beginPath();
+        for (let i = 0; i <= N; i++) {
+          const r = -xRange + (2*xRange)*i/N;
+          const v = vals[i]/m;
+          if (i === 0) ctx.moveTo(xs(r), ys(v)); else ctx.lineTo(xs(r), ys(v));
+        }
+        ctx.stroke();
+      }
+      plot(r => gauss(r, wSmf), '#1971c2', [], null);        // SMF
+      plot(Ffn, '#e03131', [5,4], null);                     // bare WG
+      plot(r => gauss(r, wE), '#2f9e44', [2,3], null);        // SSC tip
+      ctx.setLineDash([]);
+
+      // Legend
+      ctx.font = '10px -apple-system, sans-serif';
+      ctx.fillStyle = '#1971c2'; ctx.fillText('SMF', margin.l + 4, margin.t + 12);
+      ctx.fillStyle = '#e03131'; ctx.fillText('bare WG', margin.l + 36, margin.t + 12);
+      ctx.fillStyle = '#2f9e44'; ctx.fillText('SSC tip', margin.l + 92, margin.t + 12);
+    }
+
+    ['wl','mfd','W','H','delta','mfdE'].forEach(id => {
+      document.getElementById(id).addEventListener('input', compute);
+    });
+    window.addEventListener('resize', compute);
+    compute();
+  </script>
+</body>
+</html>
