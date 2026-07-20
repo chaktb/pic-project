@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Si₃N₄ — 20 ns delay line</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #ffffff; --fg: #1a1a1a; --muted: #666;
+      --card-bg: #f7f7f9; --card-border: #e1e1e6; --accent: #3b5bdb;
+      --code-bg: #f4f4f8;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0e0e10; --fg: #e8e8ea; --muted: #9a9aa3;
+        --card-bg: #1a1a1e; --card-border: #2a2a30; --accent: #748ffc;
+        --code-bg: #16161a;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg); color: var(--fg); line-height: 1.65; min-height: 100vh;
+      display: flex; flex-direction: column; }
+    header { padding: 3rem 1.5rem 1rem; max-width: 860px; margin: 0 auto; width: 100%; }
+    header h1 { font-size: clamp(1.5rem, 3.5vw, 2.2rem); margin: 0 0 0.4rem; letter-spacing: -0.02em; }
+    header p.sub { color: var(--muted); margin: 0; }
+    .back { display: inline-block; margin-bottom: 1rem; color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+    .back:hover { text-decoration: underline; }
+    main { flex: 1; max-width: 860px; width: 100%; margin: 0 auto; padding: 1rem 1.5rem 4rem; }
+    h2 { font-size: 1.2rem; margin: 2rem 0 0.75rem; letter-spacing: -0.01em; }
+    table.spec { border-collapse: collapse; width: 100%; margin: 0.5rem 0 1rem; font-size: 0.95rem; }
+    table.spec td { border: 1px solid var(--card-border); padding: 0.5rem 0.8rem; }
+    table.spec td:first-child { color: var(--muted); width: 45%; }
+    .fig { margin: 1rem 0; text-align: center; }
+    .fig img { max-width: 100%; border: 1px solid var(--card-border); border-radius: 10px; background: #000; }
+    .fig figcaption { color: var(--muted); font-size: 0.85rem; margin-top: 0.5rem; }
+    .dl { display: inline-flex; align-items: center; gap: 0.5rem; margin: 0.4rem 0.6rem 0.4rem 0;
+      padding: 0.7rem 1.1rem; background: var(--accent); color: #fff; border-radius: 10px;
+      text-decoration: none; font-weight: 600; font-size: 0.95rem; }
+    .dl.secondary { background: var(--card-bg); color: var(--fg); border: 1px solid var(--card-border); }
+    .dl:hover { opacity: 0.9; }
+    pre { background: var(--code-bg); border: 1px solid var(--card-border); border-radius: 10px;
+      padding: 1rem 1.2rem; overflow-x: auto; font-size: 0.82rem; line-height: 1.5;
+      font-family: "SF Mono", Menlo, Consolas, monospace; }
+    code { font-family: "SF Mono", Menlo, Consolas, monospace; }
+    p.note { color: var(--muted); font-size: 0.92rem; }
+    footer { text-align: center; padding: 1.5rem; color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--card-border); }
+  </style>
+</head>
+<body>
+  <header>
+    <a class="back" href="../">← Spiral Waveguides</a>
+    <h1>Si₃N₄ — 20 ns delay line</h1>
+    <p class="sub">LPCVD stoichiometric Si₃N₄ strip waveguide spiral delay line</p>
+  </header>
+
+  <main>
+    <h2>Design summary</h2>
+    <table class="spec">
+      <tr><td>Platform</td><td>LPCVD stoichiometric Si₃N₄ strip (SiO₂ clad)</td></tr>
+      <tr><td>Target group delay</td><td>20 ns @ 1550 nm</td></tr>
+      <tr><td>Waveguide group index n_g</td><td>2.0 (TE00 @1550 nm)</td></tr>
+      <tr><td>Physical length L = c·τ/n_g</td><td>2.998 m</td></tr>
+      <tr><td>Realised path length</td><td>3.006 m</td></tr>
+      <tr><td>Realised delay</td><td>20.05 ns</td></tr>
+      <tr><td>Core width</td><td>1.0 µm</td></tr>
+      <tr><td>Minimum bend radius</td><td>100 µm</td></tr>
+      <tr><td>Turn pitch (separation)</td><td>15 µm</td></tr>
+      <tr><td>Loops</td><td>123</td></tr>
+      <tr><td>Die footprint</td><td>7.56 × 7.58 mm</td></tr>
+      <tr><td>Topology</td><td>Double (in-and-out) Archimedean spiral</td></tr>
+    </table>
+
+    <h2>Layout preview</h2>
+    <figure class="fig">
+      <img src="./si3n4_20ns_delay.png" alt="Si₃N₄ — 20 ns delay line GDS layout preview" />
+      <figcaption>Rendered GDS layout. Both ports emerge at the spiral center;
+      the path spirals inward on one arm and outward on the other with no crossing.</figcaption>
+    </figure>
+
+    <h2>Downloads</h2>
+    <p>
+      <a class="dl" href="./si3n4_20ns_delay.gds" download>⬇ GDS file (300 KB)</a>
+      <a class="dl secondary" href="./si3n4_20ns_delay.py" download>⬇ Python source (2 KB)</a>
+    </p>
+    <p class="note">GDS는 GDSFactory generic PDK의 WG 레이어(1/0)에 그려져 있습니다.
+    KLayout으로 바로 열거나, 실제 공정 PDK 레이어로 remap해서 사용하세요.</p>
+
+    <h2>GDSFactory source code</h2>
+    <pre><code>&quot;&quot;&quot;
+Si3N4 20 ns Spiral Delay Line - GDSFactory generator
+====================================================
+Platform : LPCVD stoichiometric Si3N4 strip waveguide (SiO2 clad)
+Target   : 20 ns optical group delay @ 1550 nm
+
+Group delay -&gt; physical length
+    L = c * tau / n_g = (2.99792458e8 * 20e-9) / 2.0 = 2.998 m
+
+n_g = 2.0 : TE00 waveguide group index of a ~1.0 um wide Si3N4 core at
+            1550 nm. Si3N4 tolerates tight bends, so a 100 um minimum
+            radius keeps radiation loss negligible while the 3 m path
+            folds into a ~7.6 x 7.6 mm die.
+
+The path is a continuous in-and-out double (Archimedean) spiral: input
+and output ports sit on the same edge with no crossing. The loop count
+is chosen so the realised path length lands on the 20 ns target.
+&quot;&quot;&quot;
+import gdsfactory as gf
+
+gf.gpdk.PDK.activate()  # generic PDK required for the spiral cells
+
+# --- physical target ---------------------------------------------------
+C_LIGHT = 2.99792458e8   # m/s
+TAU     = 20e-9          # s   (20 ns)
+N_GROUP = 2.0            # Si3N4 TE00 waveguide group index @1550 nm
+L_TARGET_M  = C_LIGHT * TAU / N_GROUP
+L_TARGET_UM = L_TARGET_M * 1e6
+
+# --- geometry ----------------------------------------------------------
+WG_WIDTH   = 1.0     # um   core width
+MIN_RADIUS = 100.0   # um   minimum bend radius (low-loss for Si3N4)
+SEPARATION = 15.0    # um   pitch between adjacent turns
+N_LOOPS    = 123     # solved so realised length ~= 20 ns target
+
+xs = gf.cross_section.strip(width=WG_WIDTH, radius=MIN_RADIUS)
+
+c = gf.components.spiral_double(
+    min_bend_radius=MIN_RADIUS,
+    separation=SEPARATION,
+    number_of_loops=N_LOOPS,
+    npoints=8000,
+    cross_section=xs,
+)
+
+
+# --- report ------------------------------------------------------------
+L_real_um = c.info[&quot;length&quot;]
+bb = c.bbox()
+w, h = bb.right - bb.left, bb.top - bb.bottom
+print(f&quot;Target delay    : {TAU*1e9:.1f} ns  (n_g = {N_GROUP})&quot;)
+print(f&quot;Target length   : {L_TARGET_M*1e3:.1f} mm&quot;)
+print(f&quot;Realised length : {L_real_um/1e6:.4f} m  &quot;
+      f&quot;(delay = {L_real_um*1e-6*N_GROUP/C_LIGHT*1e9:.2f} ns)&quot;)
+print(f&quot;Die footprint   : {w/1000:.2f} x {h/1000:.2f} mm&quot;)
+
+c.write_gds(&quot;si3n4_20ns_delay.gds&quot;)
+print(&quot;Written: si3n4_20ns_delay.gds&quot;)
+</code></pre>
+  </main>
+
+  <footer>
+    <a href="https://github.com/chaktb/pic-project" style="color: inherit;">GitHub</a>
+  </footer>
+</body>
+</html>
