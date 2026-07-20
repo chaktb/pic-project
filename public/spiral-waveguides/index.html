@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spiral Waveguides — Delay Lines</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #ffffff; --fg: #1a1a1a; --muted: #666;
+      --card-bg: #f7f7f9; --card-border: #e1e1e6; --card-hover: #eef0ff;
+      --accent: #3b5bdb;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0e0e10; --fg: #e8e8ea; --muted: #9a9aa3;
+        --card-bg: #1a1a1e; --card-border: #2a2a30; --card-hover: #20204a;
+        --accent: #748ffc;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg); color: var(--fg); line-height: 1.6;
+      min-height: 100vh; display: flex; flex-direction: column;
+    }
+    header { padding: 3.5rem 1.5rem 1.5rem; text-align: center; max-width: 880px; margin: 0 auto; }
+    header h1 { font-size: clamp(1.6rem, 4vw, 2.5rem); margin: 0 0 0.5rem; letter-spacing: -0.02em; }
+    header p { color: var(--muted); margin: 0; font-size: 1.05rem; }
+    .back { display: inline-block; margin-top: 1rem; color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+    .back:hover { text-decoration: underline; }
+    main { flex: 1; max-width: 880px; width: 100%; margin: 0 auto; padding: 1rem 1.5rem 4rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
+    .card {
+      display: block; padding: 1.5rem; background: var(--card-bg);
+      border: 1px solid var(--card-border); border-radius: 12px;
+      text-decoration: none; color: inherit;
+      transition: background 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+    }
+    .card:hover { background: var(--card-hover); border-color: var(--accent); transform: translateY(-2px); }
+    .card .label { font-size: 0.75rem; letter-spacing: 0.12em; color: var(--accent); font-weight: 600; text-transform: uppercase; margin-bottom: 0.5rem; }
+    .card h2 { margin: 0 0 0.5rem; font-size: 1.2rem; letter-spacing: -0.01em; }
+    .card p { margin: 0; color: var(--muted); font-size: 0.95rem; }
+    footer { text-align: center; padding: 1.5rem; color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--card-border); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Spiral Waveguides</h1>
+    <p>On-chip optical delay lines — 20 ns group delay @ 1550 nm</p>
+    <a class="back" href="../">← Photonic Integrated Circuits</a>
+  </header>
+
+  <main>
+    <div class="grid">
+      <a class="card" href="./si3n4-20ns/">
+        <div class="label">Delay Line</div>
+        <h2>Si₃N₄, 20 ns delay line</h2>
+        <p>LPCVD Si₃N₄ strip waveguide (n_g = 2.0). L ≈ 3.00 m folded into a
+           ~7.6 × 7.6 mm double-spiral die. GDSFactory source + GDS download.</p>
+      </a>
+      <a class="card" href="./silica-2pct-20ns/">
+        <div class="label">Delay Line</div>
+        <h2>2%, 20 ns delay line</h2>
+        <p>2%-Δ Ge-doped silica channel (n_g = 1.47). L ≈ 4.08 m folded into a
+           ~11.8 × 11.8 mm double-spiral die. GDSFactory source + GDS download.</p>
+      </a>
+    </div>
+  </main>
+
+  <footer>
+    <a href="https://github.com/chaktb/pic-project" style="color: inherit;">GitHub</a>
+  </footer>
+</body>
+</html>
