@@ -194,6 +194,20 @@
     </figure>
   </div>
 
+  <h2>Device layout (GDS)</h2>
+  <div class="panel">
+    <p>The SSC built from this result as a ready-to-place mask cell. A solid 4 µm chip bus feeds the mode-expanding segmented taper (120 segments, duty 0.95 → 0.20 cosine, width 4 → 7 µm cosine over 530 µm); the wide low-duty facet at the chip edge is where the SMF-28 butt-couples.</p>
+    <figure>
+      <img src="./ssc_device_layout.png" alt="Top-view GDS layout of the 2% 4x4um SSC device: solid input bus, mode-expanding segmented taper, and SMF facet" loading="lazy" />
+      <figcaption>Top view of <code>ssc_device.gds</code> (core layer 1/0) — solid 4 µm input bus → segmented mode-expanding taper → 7 µm-wide, 0.20-duty facet at the chip edge (red dashed = dicing / SMF butt-coupling line, layer 10/0). Zoom shows the low-duty facet segments.</figcaption>
+    </figure>
+    <ul class="downloads">
+      <li><a href="./ssc_device.gds" download>ssc_device.gds</a> — <strong>complete SSC device cell</strong> (<code>SSC_2PCT_4UM_1550</code>): 150 µm solid input bus + the segmented taper on core layer 1/0, a facet/dicing line on layer 10/0, and a design label on layer 63/0. Centred on y = 0, propagation along +z.</li>
+      <li><a href="./make_ssc_gds.py" download>make_ssc_gds.py</a> — the generator: builds <code>ssc_device.gds</code> from this page's design parameters (needs <code>numpy</code>, <code>gdstk</code>, and <code>seg_ssc.py</code>).</li>
+    </ul>
+    <p class="note" style="margin-bottom:0;">Layer map — <code>(1,0)</code> waveguide core (2% Δ GeO₂-silica), <code>(10,0)</code> facet / dicing reference, <code>(63,0)</code> text label. The taper geometry matches <code>ssc_optimized.gds</code> below; this cell adds the routing bus, facet marker, and label for direct placement.</p>
+  </div>
+
   <h2>Downloads</h2>
   <div class="panel">
     <p>Everything needed to reproduce the result above:</p>
