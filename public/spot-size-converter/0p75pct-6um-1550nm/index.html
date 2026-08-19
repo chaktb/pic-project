@@ -155,8 +155,8 @@
   <div class="panel">
     <ul>
       <li>The SMF-28 mode-field diameter is ~<strong>10.4 µm</strong> at 1550 nm. A 0.75% Δ, 6×6 µm GeO₂-silica core is weakly confined and already guides a ≈ <strong>7.4 µm</strong> mode, so the bare butt-coupling loss is only ≈ <strong>0.49 dB</strong> — the converter has to do relatively little.</li>
-      <li>A <strong>segmented (periodically broken) taper</strong> lowers the local effective index via duty modulation. A solid 6 µm lead-in feeds the segmented region, where the duty ramps ≈ 0.80 → 0.48 (cosine) and the width grows 6 → 7 µm, expanding the mode to ≈ 10.4 µm to match the fiber.</li>
-      <li><strong>Manufacturable (DRC ≥ 0.6 µm).</strong> At pitch 3.2 µm the tightest features are a <strong>0.64 µm gap</strong> (chip-side, duty 0.80) and a <strong>1.54 µm tooth</strong> (facet, duty 0.48) — both above the 0.6 µm minimum linewidth/gap rule.</li>
+      <li>A <strong>segmented (periodically broken) taper</strong> lowers the local effective index via duty modulation. A solid 6 µm lead-in feeds the segmented region, where the duty ramps ≈ 0.58 → 0.48 (cosine) and the width grows 6 → 7 µm, expanding the mode to ≈ 10.4 µm to match the fiber.</li>
+      <li><strong>Manufacturable (DRC ≥ 0.6 µm).</strong> At pitch 3.2 µm and a chip-side duty of 0.58, the tightest features in the <em>as-drawn geometry</em> are a <strong>0.67 µm gap</strong> (the lead-in → first-tooth gap, which is only half a period because the teeth are centred) and a <strong>1.54 µm tooth</strong> (facet, duty 0.48) — both above the 0.6 µm minimum linewidth/gap rule.</li>
       <li>Target: SMF coupling insertion loss <strong>&lt; 0.1 dB</strong> at 1550 nm — achieved at <strong>0.055 dB</strong>.</li>
     </ul>
   </div>
@@ -168,12 +168,12 @@
       η = |∫ E_wg·E_smf* dA|² / (∫|E_wg|² dA · ∫|E_smf|² dA), &nbsp;&nbsp; Loss(dB) = −10·log₁₀(η)
     </div>
     <p>The 2-D waveguide mode <code>E_wg</code> (the bare chip mode, or the duty-averaged effective-medium facet mode) is found with an imaginary-distance mode solver on the real index cross-section; <code>E_smf</code> is the SMF-28 field (MFD 10.4 µm). The segmented taper expands the chip mode to the facet mode adiabatically, so the device coupling loss equals the facet-mode / SMF mismatch = <strong>0.055 dB</strong>. Separately, the full <strong>3D split-step BPM</strong> launches the SMF field and propagates it through the actual segmented structure (shown below) to visualise the mode conversion.</p>
-    <p class="note" style="margin-bottom:0;"><strong>Note on the two numbers.</strong> The expanded facet mode is weakly guided (near cutoff). A raw 3D-BPM <em>propagate-and-overlap</em> device sim reads higher (≈ 0.42 dB here) because in that regime the scalar paraxial BPM has a known mode-beating artefact — even propagating the exact eigenmode self-overlaps only 83–95 % (and the residual power stays at 0.985, i.e. essentially nothing radiates). The mode-overlap integral is free of that artefact, so the reported coupling loss is <strong>0.055 dB</strong>; the BPM field plot is shown for the physics, not the loss number.</p>
+    <p class="note" style="margin-bottom:0;"><strong>Note on the two numbers.</strong> The expanded facet mode is weakly guided (near cutoff). A raw 3D-BPM <em>propagate-and-overlap</em> device sim reads higher (≈ 0.66 dB here) because in that regime the scalar paraxial BPM has a known mode-beating artefact — even propagating the exact eigenmode self-overlaps only 83–95 % (and the residual power stays at 0.984, i.e. essentially nothing radiates). The mode-overlap integral is free of that artefact, so the reported coupling loss is <strong>0.055 dB</strong>; the BPM field plot is shown for the physics, not the loss number.</p>
   </div>
 
   <h2>Result @ 1550 nm — coupling loss 0.055 dB (&lt; 0.1 dB), DRC ≥ 0.6 µm</h2>
   <div class="panel">
-    <p>Chip waveguide <strong>6 µm × 6 µm solid</strong>; a 50 µm solid lead-in feeds the segmented taper, which ramps the duty 0.80 → 0.48 (cosine) and the width 6 → 7 µm at pitch 3.2 µm over ≈ 434 µm, expanding the mode from 7.4 µm to ≈ 10.4 µm at the SMF facet. The pitch is set so every tooth and gap clears the 0.6 µm minimum feature.</p>
+    <p>Chip waveguide <strong>6 µm × 6 µm solid</strong>; a 50 µm solid lead-in feeds the segmented taper, which ramps the duty 0.58 → 0.48 (cosine) and the width 6 → 7 µm at pitch 3.2 µm over ≈ 434 µm, expanding the mode from 7.4 µm to ≈ 10.4 µm at the SMF facet. The duty starts at 0.58 (not higher) so that the half-period lead-in → first-tooth gap still clears the 0.6 µm minimum feature.</p>
     <table class="restab">
       <tr><th>Quantity</th><th>Value</th></tr>
       <tr><td>Coupling loss — <strong>SSC facet ↔ SMF-28</strong> (mode-overlap)</td><td><strong>0.055 dB</strong> (η = 98.73 %)</td></tr>
@@ -181,10 +181,10 @@
       <tr><td>Chip mode field diameter (D4σ)</td><td>7.4 × 7.4 µm &nbsp;(n_eff = 1.44984)</td></tr>
       <tr><td>SSC facet mode field diameter (D4σ)</td><td>10.6 × 10.1 µm &nbsp;(n_eff = 1.44585)</td></tr>
       <tr><td>Facet effective width / duty</td><td>7.0 µm / 0.48 &nbsp;(pitch 3.2 µm, cosine ramp)</td></tr>
-      <tr><td>Min tooth / min gap (DRC)</td><td>1.54 µm / 0.64 µm &nbsp;(≥ 0.6 µm ✓)</td></tr>
-      <tr><td>3D-BPM propagate-and-overlap (see note)</td><td>0.42 dB (residual 0.985; near-cutoff artefact)</td></tr>
+      <tr><td>Min tooth / min gap (DRC, real geometry)</td><td>1.54 µm / 0.67 µm &nbsp;(≥ 0.6 µm ✓)</td></tr>
+      <tr><td>3D-BPM propagate-and-overlap (see note)</td><td>0.66 dB (residual 0.984; near-cutoff artefact)</td></tr>
     </table>
-    <p class="note">Expanding the mode to a round D4σ ≈ 10.6 × 10.1 µm brings it right onto the SMF-28 field (10.4 µm), lifting the overlap from 89.2 % (bare) to 98.7 % — a coupling loss of <strong>0.055 dB</strong>, within the 0.1 dB target. The whole segmented taper obeys the 0.6 µm minimum linewidth/gap rule (min tooth 1.54 µm, min gap 0.64 µm), so it is directly mask-writable. The facet mode is weakly guided (near cutoff), so a thick cladding and an adiabatic taper are assumed; the raw 3D-BPM propagate number (0.42 dB) is inflated by the paraxial mode-beating artefact noted above and is not the coupling loss.</p>
+    <p class="note">Expanding the mode to a round D4σ ≈ 10.6 × 10.1 µm brings it right onto the SMF-28 field (10.4 µm), lifting the overlap from 89.2 % (bare) to 98.7 % — a coupling loss of <strong>0.055 dB</strong>, within the 0.1 dB target. The whole segmented taper obeys the 0.6 µm minimum linewidth/gap rule — verified on the as-drawn geometry, min tooth 1.54 µm and min gap 0.67 µm (the lead-in → first-tooth gap) — so it is directly mask-writable. The facet mode is weakly guided (near cutoff), so a thick cladding and an adiabatic taper are assumed; the raw 3D-BPM propagate number (0.66 dB) is inflated by the paraxial mode-beating artefact noted above and is not the coupling loss.</p>
     <figure>
       <img src="./ssc_result_summary.png" alt="0.75% 6um 1550 nm SSC 3D-BPM propagation: DRC duty ramp, top and side field views, chip-facet mode" loading="lazy" />
       <figcaption><strong>3D-BPM propagation</strong> of the DRC-compliant device (0.75% Δ, 6 µm core) — the DRC duty/width ramp, top &amp; side ∫|E|² field views (SMF launched at the facet, right → chip, left), and the clean single-mode chip-facet output. This visualises the mode conversion; the coupling loss is the 0.055 dB mode-overlap value.</figcaption>
@@ -197,10 +197,10 @@
 
   <h2>Device layout (GDS)</h2>
   <div class="panel">
-    <p>The SSC built from this result as a ready-to-place, DRC-clean mask cell. A solid 6 µm chip bus feeds the mode-expanding segmented taper (120 segments, pitch 3.2 µm, duty 0.80 → 0.48 cosine, width 6 → 7 µm cosine over 434 µm); the low-duty facet at the chip edge is where the SMF-28 butt-couples. Every tooth ≥ 1.54 µm and every gap ≥ 0.64 µm (min feature rule 0.6 µm).</p>
+    <p>The SSC built from this result as a ready-to-place, DRC-clean mask cell. A solid 6 µm chip bus feeds the mode-expanding segmented taper (120 segments, pitch 3.2 µm, duty 0.58 → 0.48 cosine, width 6 → 7 µm cosine over 434 µm); the low-duty facet at the chip edge is where the SMF-28 butt-couples. In the as-drawn geometry every tooth ≥ 1.54 µm and every gap ≥ 0.67 µm (min feature rule 0.6 µm); the solid bus and lead-in are merged into one polygon.</p>
     <figure>
       <img src="./ssc_device_layout.png" alt="Top-view GDS layout of the 0.75% 6x6um DRC SSC device: solid input bus, segmented taper (min feature 0.64um), and SMF facet" loading="lazy" />
-      <figcaption>Top view of <code>ssc_device.gds</code> (core layer 1/0) — solid 6 µm input bus → segmented mode-expanding taper → 7 µm-wide, 0.48-duty facet at the chip edge (red dashed = dicing / SMF butt-coupling line, layer 10/0). Zoom confirms the DRC min tooth 1.54 µm / min gap 0.64 µm.</figcaption>
+      <figcaption>Top view of <code>ssc_device.gds</code> (core layer 1/0) — solid 6 µm input bus → segmented mode-expanding taper → 7 µm-wide, 0.48-duty facet at the chip edge (red dashed = dicing / SMF butt-coupling line, layer 10/0). Zoom confirms the DRC min tooth 1.54 µm / min gap 0.67 µm.</figcaption>
     </figure>
     <ul class="downloads">
       <li><a href="./ssc_device.gds" download>ssc_device.gds</a> — <strong>complete DRC-clean SSC device cell</strong> (<code>SSC_0P75PCT_6UM_1550</code>): 150 µm solid input bus + the segmented taper on core layer 1/0, a facet/dicing line on layer 10/0, and a design label on layer 63/0. All features ≥ 0.6 µm; centred on y = 0, +z propagation.</li>

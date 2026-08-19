@@ -6,8 +6,8 @@ Design
 ------
   chip 6x6um solid core (0.75% Delta, GeO2-silica)  ->  low-duty SMF facet.
   Solid 6um lead-in, then a segmented mode-expanding taper:
-      pitch 3.2um, duty 0.80 -> 0.48 (cosine), width 6 -> 7um (cosine).
-  DRC: min tooth = 0.48*3.2 = 1.54um, min gap = (1-0.80)*3.2 = 0.64um  (>= 0.6um)
+      pitch 3.2um, duty 0.58 -> 0.48 (cosine), width 6 -> 7um (cosine).
+  DRC (real geometry): min tooth 1.54um, min gap 0.67um (lead-in -> first tooth) >= 0.6um
 
 Coupling loss
 -------------
@@ -34,7 +34,7 @@ from seg_ssc import SegSSCGene, seg_gene_to_gds, evaluate_seg_gene
 from bpm3d import BPM3DSolver
 
 LAM_NM = 1550
-PITCH, DS, DE, WS, WE, NSEG = 3.2, 0.80, 0.48, 6.0, 7.0, 120
+PITCH, DS, DE, WS, WE, NSEG = 3.2, 0.58, 0.48, 6.0, 7.0, 120
 MIN_FEATURE = 0.6
 
 
@@ -64,9 +64,13 @@ def main():
     gene = SegSSCGene(pitch_um=PITCH, n_seg=NSEG, duty_start=DS, duty_end=DE,
                       w_start=WS, w_end=WE, duty_profile="cos", width_profile="cos",
                       leadins=[(50.0, 6.0)])
-    duties = gene.duties()
-    min_tooth = float((duties * PITCH).min())
-    min_gap = float(((1 - duties) * PITCH).min())
+    # measure DRC from the ACTUAL generated geometry (teeth are centred in each
+    # period, so the lead-in -> first-tooth gap is only half of (1-duty)*pitch)
+    edges = [(z0, z1) for (z0, z1, w) in gene.segments()]
+    gaps = [edges[i + 1][0] - edges[i][1] for i in range(len(edges) - 1)]
+    teeth = [z1 - z0 for (z0, z1) in edges[len(gene.leadins):]]
+    min_tooth = float(min(teeth))
+    min_gap = float(min(gaps))
     L = gene.total_length
     print(f"Platform @ {LAM_NM} nm: n_clad={plat.n_clad:.5f} n_core={plat.n_core:.5f}")
     print(f"DRC: min tooth={min_tooth:.3f}um  min gap={min_gap:.3f}um  (need >= {MIN_FEATURE}um) "
@@ -101,13 +105,17 @@ def main():
     lib_gdstk = __import__("gdstk")
     lib = lib_gdstk.Library(unit=1e-6, precision=1e-9)
     cell = lib.new_cell("SSC_0P75PCT_6UM_1550")
-    cell.add(lib_gdstk.rectangle((-BUS_IN, -WS/2), (0.0, WS/2), layer=1, datatype=0))
+    core = [lib_gdstk.rectangle((-BUS_IN, -WS/2), (0.0, WS/2), layer=1, datatype=0)]
     for (z0, z1, w) in gene.segments():
-        cell.add(lib_gdstk.rectangle((z0, -0.5*w), (z1, 0.5*w), layer=1, datatype=0))
+        core.append(lib_gdstk.rectangle((z0, -0.5*w), (z1, 0.5*w), layer=1, datatype=0))
+    # union collinear/abutting solids (bus + lead-in) into clean polygons
+    core = lib_gdstk.boolean(core, [], "or", layer=1, datatype=0)
+    for p in core:
+        cell.add(p)
     FW = 0.5 * WE + 6.0
     cell.add(lib_gdstk.rectangle((L - 0.2, -FW), (L + 0.2, FW), layer=10, datatype=0))
     cell.add(lib_gdstk.Label(
-        f"0.75% 6x6um SSC @1550nm | chip6->facet7/duty0.48 | pitch3.2 minfeat0.64um | "
+        f"0.75% 6x6um SSC @1550nm | chip6->facet7/duty0.48 | pitch3.2 minfeat0.67um | "
         f"SMF-28 0.055 dB (mode-overlap)", (L * 0.5, FW + 3.0), layer=63, texttype=0, magnification=4.0))
     lib.write_gds(os.path.join(a.out, "ssc_device.gds"))
     # keep the plain taper cell too (matches other pages)
