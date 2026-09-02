@@ -6,8 +6,9 @@ Design
 ------
   chip 6x6um solid core (0.75% Delta, GeO2-silica)  ->  low-duty SMF facet.
   Solid 6um lead-in, then a segmented mode-expanding taper:
-      pitch 3.2um, duty 0.58 -> 0.48 (cosine), width 6 -> 7um (cosine).
-  DRC (real geometry): min tooth 1.54um, min gap 0.67um (lead-in -> first tooth) >= 0.6um
+      pitch 3.2um, duty 0.80 -> 0.48 (cosine), width 6 -> 7um (cosine); gap-then-tooth
+      placement so the lead-in -> first-tooth gap is a full 0.64um.
+  DRC (real geometry): min tooth 1.54um, min gap 0.64um >= 0.6um
 
 Coupling loss
 -------------
@@ -34,8 +35,24 @@ from seg_ssc import SegSSCGene, seg_gene_to_gds, evaluate_seg_gene
 from bpm3d import BPM3DSolver
 
 LAM_NM = 1550
-PITCH, DS, DE, WS, WE, NSEG = 3.2, 0.58, 0.48, 6.0, 7.0, 120
+PITCH, DS, DE, WS, WE, NSEG = 3.2, 0.80, 0.48, 6.0, 7.0, 120
 MIN_FEATURE = 0.6
+
+
+def fixed_segments(gene):
+    """Segments placed as GAP-then-TOOTH so the lead-in -> first-tooth gap is a
+    FULL (1-duty)*pitch, not the half-period gap that centring would leave.
+    Keeps duty_start high (gentle, low-loss start) while every gap >= min feature."""
+    rects = []
+    z = 0.0
+    for L, w in gene.leadins:
+        rects.append((z, z + L, w)); z += L
+    D = gene.duties(); W = gene.widths()
+    for i in range(gene.n_seg):
+        z += (1.0 - float(D[i])) * gene.pitch_um            # full leading gap
+        rects.append((z, z + float(D[i]) * gene.pitch_um, float(W[i])))
+        z += float(D[i]) * gene.pitch_um
+    return rects
 
 
 def averaged_index_mode(solver, x, y, plat, width_um, duty, edge=0.10):
@@ -64,9 +81,9 @@ def main():
     gene = SegSSCGene(pitch_um=PITCH, n_seg=NSEG, duty_start=DS, duty_end=DE,
                       w_start=WS, w_end=WE, duty_profile="cos", width_profile="cos",
                       leadins=[(50.0, 6.0)])
-    # measure DRC from the ACTUAL generated geometry (teeth are centred in each
-    # period, so the lead-in -> first-tooth gap is only half of (1-duty)*pitch)
-    edges = [(z0, z1) for (z0, z1, w) in gene.segments()]
+    # measure DRC from the ACTUAL generated geometry (gap-then-tooth placement,
+    # so the lead-in -> first-tooth gap is a full (1-duty_start)*pitch = 0.64um)
+    edges = [(z0, z1) for (z0, z1, w) in fixed_segments(gene)]
     gaps = [edges[i + 1][0] - edges[i][1] for i in range(len(edges) - 1)]
     teeth = [z1 - z0 for (z0, z1) in edges[len(gene.leadins):]]
     min_tooth = float(min(teeth))
@@ -106,7 +123,7 @@ def main():
     lib = lib_gdstk.Library(unit=1e-6, precision=1e-9)
     cell = lib.new_cell("SSC_0P75PCT_6UM_1550")
     core = [lib_gdstk.rectangle((-BUS_IN, -WS/2), (0.0, WS/2), layer=1, datatype=0)]
-    for (z0, z1, w) in gene.segments():
+    for (z0, z1, w) in fixed_segments(gene):
         core.append(lib_gdstk.rectangle((z0, -0.5*w), (z1, 0.5*w), layer=1, datatype=0))
     # union collinear/abutting solids (bus + lead-in) into clean polygons
     core = lib_gdstk.boolean(core, [], "or", layer=1, datatype=0)
@@ -115,11 +132,14 @@ def main():
     FW = 0.5 * WE + 6.0
     cell.add(lib_gdstk.rectangle((L - 0.2, -FW), (L + 0.2, FW), layer=10, datatype=0))
     cell.add(lib_gdstk.Label(
-        f"0.75% 6x6um SSC @1550nm | chip6->facet7/duty0.48 | pitch3.2 minfeat0.67um | "
+        f"0.75% 6x6um SSC @1550nm | chip6->facet7/duty0.48 | pitch3.2 minfeat0.64um | "
         f"SMF-28 0.055 dB (mode-overlap)", (L * 0.5, FW + 3.0), layer=63, texttype=0, magnification=4.0))
     lib.write_gds(os.path.join(a.out, "ssc_device.gds"))
     # keep the plain taper cell too (matches other pages)
-    seg_gene_to_gds(gene, os.path.join(a.out, "ssc_optimized.gds"), y_offset_um=0.0)
+    _lo = lib_gdstk.Library(unit=1e-6, precision=1e-9); _c = _lo.new_cell("CIRCUIT")
+    for (z0, z1, w) in fixed_segments(gene):
+        _c.add(lib_gdstk.rectangle((z0, -0.5*w), (z1, 0.5*w), layer=0, datatype=0))
+    _lo.write_gds(os.path.join(a.out, "ssc_optimized.gds"))
     bare = SegSSCGene(pitch_um=5.0, n_seg=2, duty_start=1.0, duty_end=1.0,
                       w_start=6.0, w_end=6.0, leadins=[(100.0, 6.0)])
     seg_gene_to_gds(bare, os.path.join(a.out, "ssc_reference.gds"), y_offset_um=0.0)
@@ -163,13 +183,13 @@ def main():
     # ---- device layout preview ----
     fig, ax = plt.subplots(2, 1, figsize=(11, 4.2), gridspec_kw={"height_ratios": [2, 1]})
     ax[0].add_patch(Rectangle((-BUS_IN, -WS/2), BUS_IN, WS, color="#3b5bdb"))
-    for (z0, z1, w) in gene.segments():
+    for (z0, z1, w) in fixed_segments(gene):
         ax[0].add_patch(Rectangle((z0, -w/2), z1-z0, w, color="#3b5bdb"))
     ax[0].axvline(L, color="#e03131", lw=1.2, ls="--"); ax[0].text(L, 8, "facet / SMF", color="#e03131", ha="center", fontsize=8)
     ax[0].set_xlim(-BUS_IN, L+20); ax[0].set_ylim(-8, 10); ax[0].set_xlabel("z [um]"); ax[0].set_ylabel("x [um]")
     ax[0].set_title("0.75% 6×6µm SSC device @1550 nm — full layout (core layer)")
     z0z = L - 40
-    for (aa, bb, w) in gene.segments():
+    for (aa, bb, w) in fixed_segments(gene):
         if bb > z0z: ax[1].add_patch(Rectangle((aa, -w/2), bb-aa, w, color="#3b5bdb"))
     ax[1].axvline(L, color="#e03131", lw=1.2, ls="--")
     ax[1].set_xlim(z0z, L+3); ax[1].set_ylim(-5, 5); ax[1].set_xlabel("z [um]"); ax[1].set_ylabel("x [um]")
