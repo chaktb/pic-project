@@ -1,0 +1,15 @@
+gen  0 best 0.2920 dB median 0.4794 L_um=1e+03 d_start=0.8 d_facet=0.2 w_facet_um=7 p_d=0.8 p_w=1 P_min_um=1.2
+gen  1 best 0.2486 dB median 0.3172 L_um=894 d_start=0.8 d_facet=0.181 w_facet_um=7.5 p_d=0.874 p_w=1.15 P_min_um=1.22
+gen  2 best 0.2486 dB median 0.2843 L_um=894 d_start=0.8 d_facet=0.181 w_facet_um=7.5 p_d=0.874 p_w=1.15 P_min_um=1.22
+gen  3 best 0.2486 dB median 0.2782 L_um=894 d_start=0.8 d_facet=0.181 w_facet_um=7.5 p_d=0.874 p_w=1.15 P_min_um=1.22
+gen  4 best 0.2486 dB median 0.2661 L_um=894 d_start=0.8 d_facet=0.181 w_facet_um=7.5 p_d=0.874 p_w=1.15 P_min_um=1.22
+gen  5 best 0.2454 dB median 0.2654 L_um=858 d_start=0.821 d_facet=0.181 w_facet_um=7.14 p_d=0.956 p_w=1.15 P_min_um=1.22
+gen  6 best 0.2454 dB median 0.2563 L_um=858 d_start=0.821 d_facet=0.181 w_facet_um=7.14 p_d=0.956 p_w=1.15 P_min_um=1.22
+gen  7 best 0.2454 dB median 0.2582 L_um=858 d_start=0.821 d_facet=0.181 w_facet_um=7.14 p_d=0.956 p_w=1.15 P_min_um=1.22
+gen  8 best 0.2454 dB median 0.2588 L_um=858 d_start=0.821 d_facet=0.181 w_facet_um=7.14 p_d=0.956 p_w=1.15 P_min_um=1.22
+gen  9 best 0.2454 dB median 0.2549 L_um=858 d_start=0.821 d_facet=0.181 w_facet_um=7.14 p_d=0.956 p_w=1.15 P_min_um=1.22
+gen 10 best 0.2434 dB median 0.2591 L_um=875 d_start=0.805 d_facet=0.17 w_facet_um=7.28 p_d=1.01 p_w=1.31 P_min_um=1.22
+gen 11 best 0.2434 dB median 0.2559 L_um=875 d_start=0.805 d_facet=0.17 w_facet_um=7.28 p_d=1.01 p_w=1.31 P_min_um=1.22
+gen 12 best 0.2358 dB median 0.2548 L_um=819 d_start=0.846 d_facet=0.167 w_facet_um=7.1 p_d=0.65 p_w=1.19 P_min_um=1.21
+gen 13 best 0.2358 dB median 0.2539 L_um=819 d_start=0.846 d_facet=0.167 w_facet_um=7.1 p_d=0.65 p_w=1.19 P_min_um=1.21
+{'L_um': 819.0740363062721, 'd_start': 0.8463380797658986, 'd_facet': 0.16704021508029815, 'w_facet_um': 7.104789516664789, 'p_d': 0.6504961261369928, 'p_w': 1.1862013640998141, 'P_min_um': 1.2118745022858048} 0.23577519590832638 {'min_tooth': 0.5, 'min_gap': 0.5, 'min_width': 3.0, 'max_width': np.float64(7.098), 'n_teeth': 533, 'pitch_min': 1.212, 'pitch_max': 3.254, 'length': 840.419}

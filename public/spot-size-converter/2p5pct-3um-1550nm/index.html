@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Segmented SSC @ 1550 nm — 2.5% 3×3µm (DRC ≥ 0.5 µm, GA + 3D-BPM)</title>
-<style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Widening Segmented SSC @ 1550 nm — 2.5% 3×3 µm (GA + 3D BPM)</title>
+  <style>
     :root {
       color-scheme: light dark;
       --bg: #ffffff;
@@ -109,144 +109,370 @@
 </head>
 <body>
   <a class="back" href="../">← SSC (spot size converter)</a>
-  <h1>2.5% 3 µm × 3 µm SSC @ 1550 nm — DRC ≥ 0.5 µm, GA + 3D-BPM</h1>
-  <p class="subtitle">2.5% Δ GeO₂-silica 3×3 µm 코어 ↔ SMF-28, 1550 nm. 최소 선폭·갭 0.5 µm 제약 하에서 실제 tooth/gap 형상을 그대로 넣은 3D BPM을 목적함수로 GA 최적화한 segmented SSC — 결합손실 <strong>0.294 dB</strong> (bare 3.32 dB).</p>
+  <h1>2.5% 3 µm × 3 µm SSC @ 1550 nm</h1>
+  <p class="subtitle">2.5% Δ silica channel waveguide (3×3 µm) ↔ SMF-28 at 1550 nm — segments that gradually <strong>widen</strong> on the <strong>narrowest pitch the mask rule allows</strong> (every tooth and gap ≥ 0.5 µm), optimized with a genetic algorithm driving a 3D BPM through the real tooth/gap geometry. Coupling loss <strong>0.239 dB</strong>.</p>
 
   <div class="panel">
-    <h3>결과 요약</h3>
-    <table class="restab">
-      <tr><th>항목</th><th>값</th></tr>
-      <tr><td>SSC ↔ SMF-28 결합손실 (true-segment 3D BPM, dx 0.10 µm)</td><td><strong>0.294 dB</strong> (η = 93.5 %)</td></tr>
-      <tr><td>2D FDTD 보정 반영 추정치</td><td>≈ 0.30 – 0.32 dB</td></tr>
-      <tr><td>bare 3×3 µm 도파로 ↔ SMF-28 (SSC 없음)</td><td>3.32 dB</td></tr>
-      <tr><td>칩 모드 / facet 모드 크기 (D4σ)</td><td>3.9 × 3.9 µm → 11.9 × 11.6 µm (거의 원형)</td></tr>
-      <tr><td>구조</td><td>폭 3 µm 고정, pitch 2.017 µm × 430 period, duty 0.752 → 0.248 (선형), 길이 886 µm</td></tr>
-      <tr><td>DRC (GDS 실측)</td><td>min tooth 0.501 µm · min gap 0.501 µm · min width 2.99 µm — <span class="badge good">PASS ≥ 0.5 µm</span></td></tr>
-      <tr><td>1500–1600 nm</td><td>0.29 – 0.36 dB</td></tr>
-    </table>
+    <h3>Target &amp; SMF parameters</h3>
+    <div class="form-grid">
+      <label>Wavelength <span class="unit">(µm)</span>
+        <input type="number" id="wl" value="1.55" step="0.001" min="0.6" max="2.0" /></label>
+      <label>SMF MFD <span class="unit">(µm)</span>
+        <input type="number" id="mfd" value="10.4" step="0.1" min="1" /></label>
+      <label>WG width W <span class="unit">(µm)</span>
+        <input type="number" id="W" value="3.0" step="0.1" min="0.5" /></label>
+      <label>WG height H <span class="unit">(µm)</span>
+        <input type="number" id="H" value="3.0" step="0.1" min="0.5" /></label>
+      <label>Δ <span class="unit">(%)</span>
+        <input type="number" id="delta" value="2.5" step="0.05" min="0.01" max="50" /></label>
+      <label>Expanded MFD (SSC out) <span class="unit">(µm)</span>
+        <input type="number" id="mfdE" value="10.7" step="0.1" min="1" /></label>
+    </div>
+    <p class="note" style="margin-bottom:0;">The last field is the mode-field diameter the SSC facet presents to the SMF (the optimized device delivers ≈ 11.5 × 10.0 µm, geometric mean ≈ 10.7 µm). Set it equal to the bare WG MFD to see the loss <em>without</em> a converter.</p>
   </div>
 
-  <h2>설계 조건</h2>
-  <table>
-    <tr><th>파라미터</th><th>값</th><th>비고</th></tr>
-    <tr><td>파장</td><td>1550 nm</td><td>1500–1600 nm sweep 포함</td></tr>
-    <tr><td>클래드 n<sub>clad</sub></td><td>1.44402</td><td>fused silica, Malitson Sellmeier</td></tr>
-    <tr><td>코어 n<sub>core</sub></td><td>1.48154</td><td>Δ = (n₁² − n₂²)/(2n₁²) = 2.5 %</td></tr>
-    <tr><td>코어</td><td>3.0 × 3.0 µm</td><td>두께는 증착으로 고정 → SSC는 마스크(평면) 패턴만으로 구현</td></tr>
-    <tr><td>SMF-28 MFD</td><td>10.4 µm</td><td>Gaussian, w₀ = 5.2 µm</td></tr>
-    <tr><td>최소 선폭 / 갭</td><td>0.5 µm</td><td>tooth 길이, gap 길이, 코어 폭 모두 적용</td></tr>
-  </table>
+  <div class="panel">
+    <div class="results">
+      <div class="key">n_core (from Δ)</div><div class="val" id="nCore">—</div>
+      <div class="key">n_clad (silica, Sellmeier)</div><div class="val" id="nClad">—</div>
+      <div class="key">Bare WG mode field diameter (D4σ)</div><div class="val" id="wgMfd">—</div>
+      <div class="key">Coupling loss — bare WG ↔ SMF</div><div class="val" id="lossBare">—</div>
+      <div class="key">Coupling loss — SSC tip ↔ SMF</div><div class="val primary" id="lossSsc">—</div>
+      <div class="key">Improvement</div><div class="val" id="improve">—</div>
+      <div class="key">SSC quality</div><div class="val"><span id="qBadge" class="badge">—</span></div>
+    </div>
+    <p class="note" style="margin:0.9rem 0 0;">Gaussian–Gaussian overlap model for a quick estimate; the reported design numbers below come from the true-segment 3D BPM.</p>
+  </div>
 
-  <h2>왜 단순하지 않은가</h2>
-  <ul>
-    <li><strong>모드 크기 차이:</strong> 2.5% Δ 3 µm 코어는 D4σ 3.9 µm 모드만 가두므로 SMF-28(10.4 µm)과 직접 맞대면 3.32 dB가 손실됩니다.</li>
-    <li><strong>두께 고정의 한계:</strong> 마스크로는 폭과 z 방향 duty만 바꿀 수 있습니다. 실효매질(duty 평균) 모델에서 손실이 최소인 facet은 폭 7–8 µm / duty 0.18 인데, 이때 모드는 11 × 9.5 µm 타원형이 되어 하한이 <strong>≈ 0.166 dB</strong>입니다.</li>
-    <li><strong>세그먼트 산란:</strong> 2.5% 고대비에서는 갭 하나하나가 강한 산란체입니다. 실제 tooth/gap을 넣은 3D BPM으로 보면 실효매질 최적점(pitch 2.8 µm, duty 0.18)에 <strong>+0.5 dB</strong>의 방사 손실이 더해집니다. pitch를 줄이면 산란이 줄지만, tooth ≥ 0.5 µm 제약 때문에 facet duty의 하한(0.5/P)이 올라갑니다.</li>
-    <li>즉 <em>세그먼트 방사</em>와 <em>facet 모드 정합</em>이 DRC를 통해 서로 묶여 있어서, 실효매질 모델이 아니라 실제 형상을 직접 평가하는 최적화가 필요했습니다.</li>
-  </ul>
+  <div class="panel">
+    <p class="note" style="margin-top:0;">
+      Mode field cross-section — blue: SMF Gaussian, red dashed: bare WG mode, green: expanded SSC-tip mode. Larger overlap with the SMF means lower loss.
+    </p>
+    <canvas id="chart"></canvas>
+  </div>
 
-  <h2>해석 방법</h2>
-  <div class="formula">η = |∫ E<sub>out</sub> · E<sub>SMF</sub>* dA|² / ∫|E<sub>SMF</sub>|² dA &nbsp;(입력 = 단위 파워 칩 고유모드) &nbsp;&nbsp;→&nbsp;&nbsp; Loss = −10·log₁₀ η</div>
-  <ul>
-    <li><strong>모드 해석:</strong> 스칼라 유한차분 고유모드 solver (5-point Laplacian, sub-pixel 면적평균 굴절률).</li>
-    <li><strong>3D BPM:</strong> 스칼라 paraxial Crank–Nicolson, Peaceman–Rachford ADI, numba 병렬 Thomas 해법, 이차 흡수경계. 모드 solver와 <em>동일한</em> 이산 연산자를 써서 고유모드가 그대로 전파됩니다 — 500 µm 자기전파 overlap 0.99999999 (기존 페이지에서 언급한 “mode-beating artefact” 없음).</li>
-    <li><strong>손실 정의:</strong> facet에서의 출력장과 SMF Gaussian의 overlap이므로 테이퍼 방사 손실 + facet 부정합이 모두 포함됩니다. facet Fresnel 반사(굴절률 정합 가정)는 제외.</li>
-    <li><strong>수렴:</strong> 세그먼트 BPM은 고각 방사 성분 때문에 격자에 민감합니다 (pitch 2.8 µm 케이스: dx 0.35 → 0.34 dB, 0.18 → 0.57, 0.12 → 0.73, 0.09 → 0.70 dB). 최종 검증은 수렴 영역인 dx = 0.10 µm, dz ≤ 0.2 µm에서 수행했습니다.</li>
-    <li><strong>Bragg 반사 회피:</strong> BPM은 단방향이라 역방향 Bragg 반사를 볼 수 없으므로, GA에서 2·P·n<sub>eff</sub>/λ가 정수에서 0.08 이상 떨어지도록 제약했습니다. 최종 pitch 2.017 µm → 3.76–3.80 (정수 4와 0.2 이상 이격).</li>
-  </ul>
+  <h2>Why a spot size converter</h2>
+  <div class="panel">
+    <ul>
+      <li>The SMF-28 mode-field diameter is ~<strong>10.4 µm</strong> at 1550 nm, while a 2.5% Δ, 3×3 µm silica core guides only a <strong>3.9 µm</strong> (D4σ) mode — the bare butt-coupling loss is <strong>3.32 dB</strong>.</li>
+      <li>The 3 µm core thickness is fixed by deposition, so the converter must be drawn in the mask plane only: segment <strong>width</strong> and <strong>duty</strong> lower the local effective index and let the mode swell in both x and y.</li>
+      <li>At 2.5% Δ every gap is a strong scatterer. A coarse fixed pitch (e.g. 2.8 µm) adds ~0.5 dB of segment radiation, so the pitch is kept as <strong>short as the 0.5 µm rule allows</strong> wherever the duty is mid-range — and the segments widen gradually so the facet mode is large without pushing the duty to the rule limit too early.</li>
+      <li>Target: SMF coupling loss <strong>≤ 0.3 dB</strong>, minimum linewidth / gap <strong>≥ 0.5 µm</strong>.</li>
+    </ul>
+  </div>
 
-  <h3>GA 3단계</h3>
-  <table>
-    <tr><th>단계</th><th>목적함수</th><th>결과</th></tr>
-    <tr><td>1. 탐색</td><td>실효매질(duty 평균) 3D BPM, dx 0.35 µm</td><td>0.166 dB — pitch를 보지 못하므로 비현실적 하한</td></tr>
-    <tr><td>2. 설계 GA</td><td><strong>실제 tooth/gap 3D BPM</strong>, dx 0.15 µm, 6 유전자 (L, P, d<sub>facet</sub>, W<sub>facet</sub>, p<sub>d</sub>, p<sub>w</sub>), DRC·Bragg 제약, pop 16 × 12 세대</td><td>0.284 dB, pitch ≈ 2.0 µm로 수렴</td></tr>
-    <tr><td>3. 국소 정밀화</td><td>동일, 좁은 범위, pop 12 × 9 세대</td><td>0.275 dB (dx 0.15) → <strong>0.294 dB</strong> (dx 0.10 검증)</td></tr>
-  </table>
-  <p class="note">GA는 양 끝에서 DRC 경계에 붙었습니다: 시작 갭 = 0.5 µm (duty 0.752), facet tooth = 0.5 µm (duty 0.248). 폭은 3 µm 그대로 두는 순수 duty 테이퍼가 최적이었고, 이 조합에서 facet 모드가 11.9 × 11.6 µm로 거의 원형이 되어 타원 문제가 해소됩니다. 남는 손실은 약하게 도파되는 facet 모드의 비-Gaussian 꼬리(facet 모드 자체의 SMF 정합 0.23 dB)와 세그먼트 방사(≈ 0.04–0.06 dB)입니다.</p>
+  <h2>Structure &amp; design variables</h2>
+  <div class="panel">
+    <p style="margin-top:0;">Chip waveguide 3 µm solid (20 µm lead) → segmented section whose segments widen from 3 µm toward the SMF facet while their duty falls. Each period starts with a gap, then a tooth; the facet is cut at the end of the last tooth. The segment list is generated from a small gene vector:</p>
+    <table>
+      <tr><th>Variable</th><th>Meaning</th><th>Search range</th><th>Optimized</th></tr>
+      <tr><td><code>L</code></td><td>Segmented-section length</td><td>400 – 1500 µm</td><td>819 µm</td></tr>
+      <tr><td><code>W_facet</code></td><td>Segment width at the SMF facet (start = 3 µm)</td><td>4.5 – 9.0 µm</td><td>7.10 µm</td></tr>
+      <tr><td><code>p_w</code></td><td>Width ramp exponent, w(s) = 3 + (W_facet − 3)·s^p_w</td><td>0.4 – 2.5</td><td>1.19</td></tr>
+      <tr><td><code>d_start</code></td><td>Duty of the first segment</td><td>0.70 – 0.90</td><td>0.846</td></tr>
+      <tr><td><code>d_facet</code></td><td>Duty at the facet</td><td>0.15 – 0.35</td><td>0.167</td></tr>
+      <tr><td><code>p_d</code></td><td>Duty ramp exponent, d(s) = d_start + (d_facet − d_start)·s^p_d</td><td>0.4 – 2.5</td><td>0.65</td></tr>
+      <tr><td><code>P_min</code></td><td>Global pitch floor (above the 2nd-order Bragg band)</td><td>1.15 – 1.50 µm</td><td>1.21 µm</td></tr>
+    </table>
+    <div class="formula">Local pitch rule: &nbsp; P<sub>k</sub> = max( P_min , 0.5 µm / (1 − d) , 0.5 µm / d ) &nbsp;→ nudged out of the Bragg bands m·λ / (2 n<sub>eff</sub>), m = 2…6 (±0.03 µm guard)</div>
+    <p class="note" style="margin-bottom:0;">So the gap is pinned at 0.5 µm near the chip (high duty), the pitch drops to P_min = 1.21 µm through the mid-duty region where scattering would be strongest, and the tooth is pinned at 0.5 µm near the facet (low duty). Every tooth and gap is ≥ 0.5 µm by construction (1 nm grid, rounded up). The BPM is one-way, so contra-directional Bragg reflection is screened analytically by the band rule.</p>
+  </div>
 
-  <h3>교차 검증</h3>
-  <table>
-    <tr><th>방법</th><th>손실</th><th>의미</th></tr>
-    <tr><td>true-segment 3D BPM (dx 0.10)</td><td><strong>0.294 dB</strong></td><td>설계값</td></tr>
-    <tr><td>실효매질 3D BPM</td><td>0.256 dB</td><td>세그먼트 방사 제외 → 방사분 ≈ 0.04 dB</td></tr>
-    <tr><td>local-mode EME (80 slice overlap 곱 × facet)</td><td>0.316 dB</td><td>junction 0.051 + taper 0.084 + facet 0.232 dB (보수적 상한)</td></tr>
-    <tr><td>2D FDTD vs paraxial BPM (60 µm 세그먼트 구간)</td><td>BPM이 −0.06 ~ +0.02 dB</td><td>paraxial BPM이 세그먼트 손실을 약간 과소평가 → 설계값에 +0.01–0.03 dB 보정</td></tr>
-  </table>
+  <h2>Optimization workflow (GA ⇄ 3D BPM)</h2>
+  <div class="panel">
+    <ul>
+      <li><strong>① gene → structure</strong>: the 7-gene vector builds the tooth list (z₀, z₁, w₀, w₁) with the local minimum-pitch rule — the same list that is written to the GDS.</li>
+      <li><strong>② 3D BPM run</strong>: launch the 3×3 µm chip eigenmode and propagate through every real tooth and gap (scalar, paraxial Crank–Nicolson ADI, dx = 0.12 µm, dz ≤ 0.25 µm, absorbing boundaries).</li>
+      <li><strong>③ fitness</strong>: <code>Loss = −10·log10 |⟨E_SMF | E_out⟩|²</code> [dB] at the facet — taper radiation and facet mismatch both included.</li>
+      <li><strong>④ select · cross · mutate</strong>: tournament selection + BLX-α crossover + Gaussian mutation, elitism 2, population 16.</li>
+      <li><strong>⑤ iterate</strong>: 14 generations (224 BPM runs), then the best candidate is re-verified on a finer grid (dx = 0.10 µm, dz ≤ 0.2 µm).</li>
+    </ul>
+    <div class="formula">
+      Objective: minimize &nbsp; f(g) = −10·log₁₀ η(g), &nbsp; η = |∫ E<sub>out</sub>·E<sub>SMF</sub>* dA|² / ∫|E<sub>SMF</sub>|² dA &nbsp; (input = unit-power chip mode)
+    </div>
+    <pre># ga_widen.py (excerpt)
+def fitness(genes):
+    des   = from_genes(genes)                      # WideningSSC: tooth list, DRC by construction
+    psi,_ = bpm.run(chip_mode, segmented_slices(des, grid, plat, dz=0.25))
+    return -10*log10(grid.overlap_raw(psi, smf))   # dB, smaller is better
 
-  <figure>
-    <img src="./ssc_result_summary.png" alt="GA convergence, facet-mode loss map, taper law, BPM field, facet profiles, wavelength, misalignment and fabrication tolerance" loading="lazy" />
-    <figcaption>GA 수렴(3단계), facet 폭–duty 손실 지도(흰 점선 = tooth 0.5 µm 경계), duty/폭 테이퍼 법칙, 3D BPM 장 분포(x–z, y–z), facet 모드 단면 vs SMF-28, 파장·광섬유 정렬오차·공정(CD bias, facet 절단 위치) 허용도.</figcaption>
-  </figure>
-  <figure>
-    <img src="./ssc_compare.png" alt="Loss comparison and 2D FDTD calibration" loading="lazy" />
-    <figcaption>왼쪽: 방법별 결합손실 비교 (bare, solid inverse taper 대안, GA segmented SSC 3가지 평가). 오른쪽: 60 µm 세그먼트 구간에 대한 2D full-wave FDTD와 paraxial BPM 비교.</figcaption>
-  </figure>
+# The mode solver and the BPM share the same 5-point Laplacian, so an eigenmode
+# propagates unchanged (500 um self-overlap 0.99999999) -- no mode-beating artefact.</pre>
+  </div>
 
-  <h2>허용도</h2>
-  <table>
-    <tr><th>변수</th><th>조건</th><th>손실 (dB)</th></tr>
-    <tr><td rowspan="2">CD bias (tooth 길이·폭 동시)</td><td>−0.10 / −0.05 µm</td><td>0.533 / 0.416</td></tr>
-    <tr><td>+0.05 / +0.10 µm</td><td>0.347 / 0.383</td></tr>
-    <tr><td>facet 절단 위치</td><td>−0.25 µm (마지막 tooth 깎임) ~ +1.5 µm (갭 안)</td><td>0.297 ~ 0.302</td></tr>
-    <tr><td>SMF 정렬오차 (x 또는 y)</td><td>0.5 / 1.0 / 2.0 µm</td><td>0.335 / 0.458 / 0.948</td></tr>
-    <tr><td>파장</td><td>1500 / 1525 / 1575 / 1600 nm</td><td>0.317 / 0.296 / 0.323 / 0.357</td></tr>
-  </table>
-  <p class="note">CD가 줄어드는 쪽(−bias)이 더 민감합니다 — facet 모드가 cutoff 가까이 밀려 n<sub>eff</sub> 여유가 0.0007에 불과하기 때문입니다. 공정 bias를 알고 있다면 마스크에 그만큼 보정 bias를 주는 것이 좋습니다. facet 절단(연마) 위치에는 둔감해서 dicing/polishing 공차 부담은 작습니다.</p>
-
-  <h2>대안: solid inverse taper</h2>
-  <p>갭이 없는 단순 폭 테이퍼(3 µm → 0.55 µm tip, 2 mm, √ 형상)도 같은 BPM으로 <strong>0.300 dB</strong>가 나와 segmented 설계와 거의 같습니다. tip 0.50 / 0.60 / 0.65 µm에서는 0.33 / 0.32 / 0.40 dB. 0.5 µm 갭 패턴이 부담스러운 공정이라면 고려할 만해서 GDS에 <code>SSC_ALT_INV_TAPER</code> 셀로 함께 넣었습니다 (길이가 2배 이상이고 tip 폭이 DRC 한계에 가깝다는 점은 감안).</p>
-
-  <h2>Device layout (GDS)</h2>
-  <figure>
-    <img src="./ssc_layout.png" alt="SSC layout: full device, chip-side lead and first gaps, facet-side last teeth" loading="lazy" />
-    <figcaption>위: 전체 SSC (x 방향 압축). 가운데: 칩 쪽 3 µm solid lead → 첫 갭 0.5 µm. 아래: facet 쪽 마지막 tooth 0.5 µm, 빨간 점선이 SMF facet.</figcaption>
-  </figure>
-  <table>
-    <tr><th>Cell</th><th>내용</th></tr>
-    <tr><td><code>SSC_2p5_3um_1550</code></td><td>단일 SSC: 3 µm solid lead 20 µm → 430 period segmented taper → facet (+x)</td></tr>
-    <tr><td><code>SSC_B2B_TEST</code></td><td>SSC – 3 mm 직선 3 µm 도파로 – SSC (back-to-back, 총 4.77 mm) — 삽입손실/cut-back 측정용</td></tr>
-    <tr><td><code>REF_STRAIGHT</code></td><td>SSC 없는 같은 길이 3 µm 직선 도파로 (비교 기준)</td></tr>
-    <tr><td><code>SSC_ALT_INV_TAPER</code></td><td>대안 solid inverse taper (tip 0.55 µm, 2 mm)</td></tr>
-    <tr><td><code>TOP</code></td><td>위 4개를 250 µm 간격으로 배치</td></tr>
-  </table>
-  <p class="note">레이어: (1,0) WG core · (2,0) FACET 절단/연마 위치 마커 · (10,0) TEXT (비공정). 좌표 1 nm grid snap. 실제 공정 PDK 레이어로 remap 필요.</p>
+  <h2>GA optimization result @ 1550 nm</h2>
+  <div class="panel">
+    <p>A pure-Python pipeline (tooth-list generator → self-written ADI 3D BPM with numba → genetic algorithm → <code>gdstk</code>) was run for the target spec: chip waveguide <strong>3 µm × 3 µm solid</strong> on the left, <strong>7.1 µm-wide low-duty SMF facet</strong> on the right, thickness fixed at 3 µm, every tooth and gap ≥ 0.5 µm.</p>
+    <table class="restab">
+      <tr><th>Quantity</th><th>Optimized value</th></tr>
+      <tr><td>Coupling loss @ 1550 nm (fine grid, dx = 0.10 µm)</td><td><strong>0.239 dB</strong> (η = 94.7 %)</td></tr>
+      <tr><td>Bare 3×3 µm WG ↔ SMF (no SSC)</td><td>3.32 dB</td></tr>
+      <tr><td>Number of segments / total length</td><td>533 / 840 µm (incl. 20 µm lead)</td></tr>
+      <tr><td>Width ramp (start → facet)</td><td>3.0 → 7.10 µm</td></tr>
+      <tr><td>Duty ramp (start → facet)</td><td>0.846 → 0.167</td></tr>
+      <tr><td>Pitch (chip → middle → facet)</td><td>3.25 → 1.21 → 2.98 µm</td></tr>
+      <tr><td>Tooth / gap (chip end)</td><td>2.75 µm / 0.50 µm</td></tr>
+      <tr><td>Tooth / gap (facet end)</td><td>0.50 µm / 2.48 µm</td></tr>
+      <tr><td>DRC (from the GDS tooth list)</td><td>min tooth 0.500 µm · min gap 0.500 µm · min width 3.0 µm <span class="badge good">PASS</span></td></tr>
+      <tr><td>Output spot (D4σ, x × y)</td><td>11.5 × 10.0 µm</td></tr>
+      <tr><td>Residual (non-radiated) power at the facet</td><td>0.978</td></tr>
+    </table>
+    <p class="note">The chip mode (3.9 µm) expands through the widening, thinning segments to ≈ 11.5 × 10.0 µm at the facet. Compared with the earlier uniform-width (3 µm) design with a fixed 2.02 µm pitch (0.294 dB, kept below as the reference), widening the segments lowers the facet-mode limit to 0.159 dB and the dense mid-section pitch keeps the segment radiation small, so the device reaches 0.239 dB.</p>
+    <table class="restab">
+      <tr><th>Tolerance</th><th>Condition</th><th>Loss</th></tr>
+      <tr><td>Wavelength</td><td>1500 / 1525 / 1575 / 1600 nm</td><td>0.243 / 0.237 / 0.251 / 0.268 dB</td></tr>
+      <tr><td>CD bias (tooth length and width)</td><td>−0.10 / −0.05 / +0.05 / +0.10 µm</td><td>0.304 / 0.301 / 0.267 / 0.276 dB</td></tr>
+      <tr><td>Facet cut position</td><td>−0.25 µm … +2.0 µm</td><td>0.239 – 0.248 dB</td></tr>
+      <tr><td>SMF offset (x / y)</td><td>0.5 µm / 1.0 µm</td><td>0.28 / 0.39 – 0.41 dB</td></tr>
+    </table>
+    <figure>
+      <img src="./ssc_result_summary.png" alt="Widening segmented SSC: geometry, duty/width ramps, pitch rule, GA convergence, top/side BPM field, facet field vs SMF, tolerances" loading="lazy" />
+      <figcaption>GA-optimized SSC — geometry, duty / width ramps, the minimum-pitch rule (tooth and gap ≥ 0.5 µm), GA convergence, top &amp; side |E|² propagation, the facet field against SMF-28, and wavelength / misalignment / fabrication tolerances.</figcaption>
+    </figure>
+    <figure>
+      <img src="./ssc_compare.png" alt="Uniform-width reference SSC vs widening optimized SSC" loading="lazy" />
+      <figcaption>Reference uniform-width segmented SSC (fixed pitch 2.02 µm, 0.294 dB) vs. the GA-optimized widening, minimum-pitch geometry (0.239 dB), both on the same dx = 0.10 µm grid.</figcaption>
+    </figure>
+    <p class="note" style="margin-bottom:0;">Method check: a 2D full-wave FDTD of 60 µm segmented sections (pitch 2.0–2.8 µm, duty 0.3–0.75) gives segment losses within −0.06 / +0.02 dB of the paraxial BPM (<code>fdtd2d_calibration.json</code>), so the paraxial BPM is slightly optimistic for segment scattering — a realistic expectation is ≈ 0.24–0.27 dB. The calculation is scalar (polarization-averaged); facet Fresnel reflection is excluded (index-matched butt coupling).</p>
+  </div>
 
   <h2>Downloads</h2>
-  <ul class="downloads">
-    <li><a href="./ssc_2p5pct_3um_1550.gds" download>ssc_2p5pct_3um_1550.gds</a> 최종 GDS (4 cells + TOP)</li>
-    <li><a href="./ssc_core.py" download>ssc_core.py</a> 모드 solver · ADI-CN 3D BPM · SSC 형상/DRC</li>
-    <li><a href="./ssc_ga.py" download>ssc_ga.py</a> GA (stage 1 실효매질 / stage 2 실제 세그먼트)</li>
-    <li><a href="./ga_refine.py" download>ga_refine.py</a> stage 3 국소 정밀화</li>
-    <li><a href="./verify_final.py" download>verify_final.py</a> dx 0.10 µm 최종 검증 + 허용도</li>
-    <li><a href="./fdtd2d_check.py" download>fdtd2d_check.py</a> 2D FDTD vs BPM 보정</li>
-    <li><a href="./compare_solid.py" download>compare_solid.py</a> solid inverse taper 대안</li>
-    <li><a href="./scan_facet.py" download>scan_facet.py</a> facet 폭–duty 지도</li>
-    <li><a href="./make_gds.py" download>make_gds.py</a> GDS 생성 (gdstk)</li>
-    <li><a href="./make_figures.py" download>make_figures.py</a> 그림 생성</li>
-    <li><a href="./final_design.json" download>final_design.json</a> · <a href="./verify_results.json" download>verify_results.json</a> · <a href="./ga_stage3_refine.json" download>ga_stage3_refine.json</a> · <a href="./ga_stage2_seg.json" download>ga_stage2_seg.json</a> · <a href="./fdtd2d_calibration.json" download>fdtd2d_calibration.json</a></li>
-  </ul>
+  <div class="panel">
+    <p>Everything needed to reproduce the result above:</p>
+    <ul class="downloads">
+      <li><a href="./ssc_optimized.gds" download>ssc_optimized.gds</a> — GA-optimized mask layout: <code>SSC_2p5_3um_1550</code> (533 widening segments, chip 3 µm → SMF facet 7.1 µm), <code>SSC_B2B_TEST</code> (SSC – 3 mm WG – SSC), <code>REF_STRAIGHT</code>; layers (1,0) core, (2,0) facet marker, (10,0) text.</li>
+      <li><a href="./ssc_reference.gds" download>ssc_reference.gds</a> — the reference uniform-width segmented SSC (0.294 dB) for comparison.</li>
+      <li><a href="./seg_vp.py" download>seg_vp.py</a> — widening, minimum-pitch segment generator with DRC and Bragg-band rules.</li>
+      <li><a href="./ssc_core.py" download>ssc_core.py</a> — platform (1550 nm silica Sellmeier, Δ → n_core), FD mode solver, ADI-CN 3D BPM, tooth/gap slicing.</li>
+      <li><a href="./ga_widen.py" download>ga_widen.py</a> — GA driver (7 genes, true-segment BPM fitness).</li>
+      <li><a href="./verify_widen.py" download>verify_widen.py</a> — dx = 0.10 µm verification and tolerance study.</li>
+      <li><a href="./make_gds_widen.py" download>make_gds_widen.py</a> · <a href="./make_figures_widen.py" download>make_figures_widen.py</a> — GDS and figure generation.</li>
+      <li><a href="./fdtd2d_check.py" download>fdtd2d_check.py</a> — 2D FDTD vs paraxial BPM calibration of segment loss.</li>
+      <li><a href="./final_design.json" download>final_design.json</a> · <a href="./verify_results.json" download>verify_results.json</a> · <a href="./ga_widen_A.json" download>ga_widen_A.json</a> — design, verification and GA records.</li>
+      <li><a href="./ssc_result_summary.png" download>ssc_result_summary.png</a> — full result figure.</li>
+      <li><a href="./ssc_compare.png" download>ssc_compare.png</a> — reference vs. optimized comparison figure.</li>
+    </ul>
+    <p class="note" style="margin-bottom:0;">Run with <code>python3 ga_widen.py</code> → <code>python3 verify_widen.py</code> → <code>python3 make_gds_widen.py</code> (needs <code>numpy</code>, <code>scipy</code>, <code>numba</code>, <code>gdstk</code>, <code>matplotlib</code>). The GA takes ≈ 40 min on 2 cores; always re-validate the final candidate on the fine grid (dx ≤ 0.10 µm). The earlier uniform-width study (scripts, solid inverse-taper alternative) is kept in <code>archive_uniform/</code>.</p>
+  </div>
 
-  <h2>재현</h2>
-<pre>pip install numpy scipy numba gdstk matplotlib
-python scan_facet.py          # facet landscape            (~1.5 min)
-python ssc_ga.py 1            # stage 1: effective-medium GA (~2 min)
-python ssc_ga.py 2            # stage 2: true-segment GA     (~25 min, 2 cores)
-python ga_refine.py           # stage 3: local refinement    (~20 min)
-python verify_final.py        # dx = 0.10 um verification    (~5 min)
-python compare_solid.py       # solid inverse-taper alternative
-python fdtd2d_check.py        # 2D FDTD calibration           (~6 min)
-python make_gds.py            # -> ssc_2p5pct_3um_1550.gds, ssc_layout.png
-python make_figures.py        # -> ssc_result_summary.png, ssc_compare.png</pre>
+  <h2>Equations</h2>
+  <div class="formula">
+    SMF mode (Gaussian): E_SMF(r) = exp(−r²/w²), &nbsp; w = MFD/2 = 5.2 µm
+  </div>
+  <div class="formula">
+    Overlap: η = |∫ E_a·E_b* dA|² / (∫|E_a|² dA · ∫|E_b|² dA), &nbsp;&nbsp; Loss(dB) = −10·log₁₀(η)
+  </div>
+  <div class="formula">
+    Index from Δ: n_core = n_clad / √(1 − 2Δ), &nbsp; Δ = (n_core² − n_clad²)/(2 n_core²); &nbsp; n_clad = 1.44402 (Malitson), n_core = 1.48154 &nbsp;(the browser panel uses n_clad/(1 − Δ) — within 0.0005)
+  </div>
+  <div class="formula">
+    Paraxial BPM: ∂ψ/∂z = (i / 2β₀) [ ∂²/∂x² + ∂²/∂y² + k₀² n²(x,y,z) − β₀² ] ψ &nbsp; (Peaceman–Rachford ADI, Crank–Nicolson)
+  </div>
 
-  <h2>한계와 주의</h2>
-  <ul>
-    <li>스칼라 해석입니다 (TE/TM 구분 없음). 2.5% Δ에서 편광 의존성은 작지만 0.0x dB 수준의 차이는 있을 수 있습니다.</li>
-    <li>paraxial BPM은 세그먼트에서 고각으로 나가는 방사를 근사적으로만 다룹니다 — 2D FDTD 보정 결과 BPM이 약간 낙관적이어서 0.30–0.32 dB를 현실적 추정치로 봅니다.</li>
-    <li>역방향 반사(Bragg, facet Fresnel)는 BPM에 포함되지 않습니다. Bragg는 pitch 선택으로 회피했고, facet은 굴절률 정합(접착제/젤)을 가정했습니다.</li>
-    <li>SMF-28은 MFD 10.4 µm Gaussian으로 근사했습니다.</li>
-  </ul>
+  <h2>Reference implementations</h2>
+  <p class="links">
+    <a href="https://github.com/chaktb/pic-project/blob/main/coupling_loss.py">coupling_loss.py</a>
+    <a href="https://github.com/chaktb/pic-project/blob/main/mfd_coupling.py">mfd_coupling.py</a>
+    <a href="../coupling-loss/">Coupling loss tool →</a>
+    <a href="../mfd-coupling-loss/">MFD &amp; coupling loss tool →</a>
+  </p>
 
-  <footer>Generated with Python (numpy/scipy/numba/gdstk) · part of <a href="../">SSC (spot size converter)</a></footer>
+  <footer>Browser panel uses a Gaussian-overlap estimate; the reported 0.239 dB comes from a Python ADI 3D BPM through the real tooth/gap geometry, driven by the genetic algorithm in the downloads above.</footer>
 
+  <script>
+    // --- Malitson (1965) fused silica Sellmeier, wavelength in µm ---
+    function nSilica(wl) {
+      const B1=0.6961663,B2=0.4079426,B3=0.8974794;
+      const C1=0.0684043**2,C2=0.1162414**2,C3=9.896161**2;
+      const l2=wl*wl;
+      return Math.sqrt(1+B1*l2/(l2-C1)+B2*l2/(l2-C2)+B3*l2/(l2-C3));
+    }
+
+    // Symmetric-slab fundamental TE mode -> {kappa, gamma, nEff, a}
+    function slabFundamentalTE(wl, d, nCore, nClad) {
+      if (nCore <= nClad) return null;
+      const k0 = 2*Math.PI/wl, a = d/2;
+      const V = k0*a*Math.sqrt(nCore*nCore - nClad*nClad);
+      if (V <= 0) return null;
+      const upper = Math.min(Math.PI/2 - 1e-9, V - 1e-12);
+      if (upper <= 0) return null;
+      const f = (u) => {
+        const w = Math.sqrt(Math.max(V*V - u*u, 0));
+        return u*Math.tan(u) - w;
+      };
+      let lo = 1e-9, hi = upper, flo = f(lo);
+      for (let i = 0; i < 100; i++) {
+        const mid = 0.5*(lo+hi), fmid = f(mid);
+        if (flo*fmid <= 0) { hi = mid; }
+        else { lo = mid; flo = fmid; }
+        if (hi - lo < 1e-13) break;
+      }
+      const u = 0.5*(lo+hi);
+      const w = Math.sqrt(Math.max(V*V - u*u, 0));
+      const kappa = u/a, gamma = w/a;
+      const nEff = Math.sqrt(nCore*nCore - (kappa/k0)**2);
+      return { kappa, gamma, nEff, a };
+    }
+
+    function slabField(r, k, g, a) {
+      if (Math.abs(r) <= a) return Math.cos(k*r);
+      return Math.cos(k*a) * Math.exp(-g*(Math.abs(r) - a));
+    }
+    const gauss = (r, w) => Math.exp(-(r*r)/(w*w));
+
+    function integrateTrap(f, lo, hi, N) {
+      const h = (hi-lo)/N;
+      let s = 0.5*(f(lo) + f(hi));
+      for (let i = 1; i < N; i++) s += f(lo + i*h);
+      return s * h;
+    }
+
+    // 1-D overlap efficiency between two field functions on [-L,L]
+    function overlap1D(Fa, Fb, L, N) {
+      const num = integrateTrap(r => Fa(r)*Fb(r), -L, L, N);
+      const da  = integrateTrap(r => Fa(r)**2, -L, L, N);
+      const db  = integrateTrap(r => Fb(r)**2, -L, L, N);
+      return (num*num)/(da*db);
+    }
+
+    // D4sigma mode-field diameter of a slab field (2nd moment)
+    function d4sigma(Ffn, L, N) {
+      const num = integrateTrap(r => r*r*Ffn(r)**2, -L, L, N);
+      const den = integrateTrap(r => Ffn(r)**2, -L, L, N);
+      const sigma = Math.sqrt(num/den);
+      return 4*sigma; // D4sigma
+    }
+
+    function compute() {
+      const wl   = parseFloat(document.getElementById('wl').value);
+      const mfd  = parseFloat(document.getElementById('mfd').value);
+      const W    = parseFloat(document.getElementById('W').value);
+      const H    = parseFloat(document.getElementById('H').value);
+      const dl   = parseFloat(document.getElementById('delta').value);
+      const mfdE = parseFloat(document.getElementById('mfdE').value);
+
+      if (![wl,mfd,W,H,dl,mfdE].every(Number.isFinite) ||
+          wl<=0 || mfd<=0 || W<=0 || H<=0 || dl<=0 || mfdE<=0) return;
+
+      const nClad = nSilica(wl);
+      const nCore = nClad / (1 - dl/100);
+      document.getElementById('nCore').textContent = nCore.toFixed(6);
+      document.getElementById('nClad').textContent = nClad.toFixed(6);
+
+      const vmode = slabFundamentalTE(wl, H, nCore, nClad);
+      const hmode = slabFundamentalTE(wl, W, nCore, nClad);
+      if (!vmode || !hmode) { setNoMode(); return; }
+
+      const wSmf = mfd/2, wE = mfdE/2;
+      const L = Math.max(6*wSmf, 6*W, 6*H, 6*wE);
+      const N = 4000;
+
+      const Xfn = (x) => slabField(x, hmode.kappa, hmode.gamma, hmode.a);
+      const Yfn = (y) => slabField(y, vmode.kappa, vmode.gamma, vmode.a);
+
+      // Bare WG <-> SMF (separable: eta = eta_x * eta_y)
+      const etaBareX = overlap1D(x => gauss(x, wSmf), Xfn, L, N);
+      const etaBareY = overlap1D(y => gauss(y, wSmf), Yfn, L, N);
+      const etaBare = etaBareX * etaBareY;
+      const lossBare = -10*Math.log10(etaBare);
+
+      // Bare WG mode field diameter (geometric mean of x/y D4sigma)
+      const wgMfd = Math.sqrt(d4sigma(Xfn, L, N) * d4sigma(Yfn, L, N));
+
+      // SSC tip modeled as an expanded Gaussian (target MFD) <-> SMF
+      const etaSsc = overlap1D(r => gauss(r, wSmf), r => gauss(r, wE), L, N)**1; // radial-symmetric -> single factor
+      const lossSsc = -10*Math.log10(etaSsc);
+
+      document.getElementById('wgMfd').textContent  = wgMfd.toFixed(2) + ' µm';
+      document.getElementById('lossBare').textContent = lossBare.toFixed(3) + ' dB';
+      document.getElementById('lossSsc').textContent  = lossSsc.toFixed(3) + ' dB';
+      const gain = lossBare - lossSsc;
+      document.getElementById('improve').textContent = (gain>=0?'−':'+') + Math.abs(gain).toFixed(3) + ' dB';
+
+      const badge = document.getElementById('qBadge');
+      if (lossSsc < 0.3)      { badge.className = 'badge good'; badge.textContent = 'Target met (<0.3 dB)'; }
+      else if (lossSsc < 1.0) { badge.className = 'badge warn'; badge.textContent = 'Close (<1 dB)'; }
+      else                    { badge.className = 'badge bad';  badge.textContent = 'Needs work'; }
+
+      drawProfile(wSmf, Xfn, wE, W, L);
+    }
+
+    function setNoMode() {
+      ['wgMfd','lossBare','lossSsc','improve'].forEach(id => document.getElementById(id).textContent = 'no mode');
+      const badge = document.getElementById('qBadge');
+      badge.className = 'badge bad'; badge.textContent = 'No guided mode';
+    }
+
+    function drawProfile(wSmf, Ffn, wE, coreWidth, L) {
+      const canvas = document.getElementById('chart');
+      const dpr = window.devicePixelRatio || 1;
+      const cssW = canvas.clientWidth || 800;
+      const cssH = 220;
+      canvas.width = cssW*dpr; canvas.height = cssH*dpr;
+      canvas.style.height = cssH + 'px';
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(1,0,0,1,0,0);
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0,0,cssW,cssH);
+
+      const muted = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim();
+      const border = getComputedStyle(document.documentElement).getPropertyValue('--card-border').trim();
+
+      const margin = { l: 40, r: 12, t: 16, b: 28 };
+      const Wp = cssW - margin.l - margin.r;
+      const Hp = cssH - margin.t - margin.b;
+
+      const xRange = Math.min(L, 4*Math.max(wSmf, coreWidth, wE));
+      const xs = (r) => margin.l + ((r + xRange)/(2*xRange))*Wp;
+      const ys = (v) => margin.t + (1 - v)*Hp;
+
+      // Core box
+      const a = coreWidth/2;
+      ctx.fillStyle = 'rgba(128,128,128,0.12)';
+      ctx.fillRect(xs(-a), margin.t, xs(a)-xs(-a), Hp);
+
+      // Axis
+      ctx.strokeStyle = border; ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(margin.l, margin.t + Hp); ctx.lineTo(margin.l + Wp, margin.t + Hp);
+      ctx.stroke();
+      ctx.fillStyle = muted; ctx.font = '11px -apple-system, sans-serif';
+      [-xRange, -xRange/2, 0, xRange/2, xRange].forEach(t => {
+        ctx.fillText(t.toFixed(1), xs(t) - 8, margin.t + Hp + 14);
+      });
+      ctx.fillText('µm', margin.l + Wp - 14, margin.t + Hp + 14);
+
+      const N = 300;
+      function plot(fn, color, dash, norm) {
+        const vals = [];
+        for (let i = 0; i <= N; i++) vals.push(fn(-xRange + (2*xRange)*i/N));
+        const m = norm || Math.max(...vals.map(Math.abs));
+        ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.setLineDash(dash);
+        ctx.beginPath();
+        for (let i = 0; i <= N; i++) {
+          const r = -xRange + (2*xRange)*i/N;
+          const v = vals[i]/m;
+          if (i === 0) ctx.moveTo(xs(r), ys(v)); else ctx.lineTo(xs(r), ys(v));
+        }
+        ctx.stroke();
+      }
+      plot(r => gauss(r, wSmf), '#1971c2', [], null);        // SMF
+      plot(Ffn, '#e03131', [5,4], null);                     // bare WG
+      plot(r => gauss(r, wE), '#2f9e44', [2,3], null);        // SSC tip
+      ctx.setLineDash([]);
+
+      // Legend
+      ctx.font = '10px -apple-system, sans-serif';
+      ctx.fillStyle = '#1971c2'; ctx.fillText('SMF', margin.l + 4, margin.t + 12);
+      ctx.fillStyle = '#e03131'; ctx.fillText('bare WG', margin.l + 36, margin.t + 12);
+      ctx.fillStyle = '#2f9e44'; ctx.fillText('SSC tip', margin.l + 92, margin.t + 12);
+    }
+
+    ['wl','mfd','W','H','delta','mfdE'].forEach(id => {
+      document.getElementById(id).addEventListener('input', compute);
+    });
+    window.addEventListener('resize', compute);
+    compute();
+  </script>
 </body>
 </html>
