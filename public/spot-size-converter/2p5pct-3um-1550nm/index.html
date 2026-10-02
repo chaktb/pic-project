@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Segmented SSC @ 1550 nm — 2.5% 3×3µm (DRC ≥ 0.5 µm, GA + 3D-BPM)</title>
+<style>
+    :root {
+      color-scheme: light dark;
+      --bg: #ffffff;
+      --fg: #1a1a1a;
+      --muted: #666;
+      --card-bg: #f7f7f9;
+      --card-border: #e1e1e6;
+      --accent: #3b5bdb;
+      --input-bg: #ffffff;
+      --good: #2f9e44;
+      --warn: #f08c00;
+      --bad: #e03131;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0e0e10;
+        --fg: #e8e8ea;
+        --muted: #9a9aa3;
+        --card-bg: #1a1a1e;
+        --card-border: #2a2a30;
+        --accent: #748ffc;
+        --input-bg: #14141a;
+        --good: #51cf66;
+        --warn: #ffa94d;
+        --bad: #ff6b6b;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0 auto; max-width: 920px; padding: 1.5rem;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg); color: var(--fg); line-height: 1.6;
+    }
+    .back { display: inline-block; margin-bottom: 1rem; color: var(--muted); text-decoration: none; }
+    .back:hover { text-decoration: underline; color: var(--accent); }
+    h1 { margin-bottom: 0.25rem; letter-spacing: -0.02em; }
+    h2 { margin-top: 2rem; letter-spacing: -0.01em; }
+    .subtitle { color: var(--muted); margin-top: 0; }
+    .panel {
+      background: var(--card-bg); border: 1px solid var(--card-border);
+      border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0;
+    }
+    .panel h3 { margin-top: 0; }
+    .form-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;
+    }
+    label { display: flex; flex-direction: column; font-size: 0.9rem; color: var(--muted); }
+    label span.unit { font-size: 0.8rem; }
+    input[type=number] {
+      margin-top: 0.35rem; padding: 0.55rem 0.75rem; font-size: 1rem;
+      background: var(--input-bg); color: var(--fg); border: 1px solid var(--card-border);
+      border-radius: 8px; font-variant-numeric: tabular-nums;
+    }
+    input[type=number]:focus { outline: none; border-color: var(--accent); }
+    .results {
+      display: grid; grid-template-columns: 1fr auto;
+      gap: 0.4rem 1.5rem; font-variant-numeric: tabular-nums;
+    }
+    .results .key { color: var(--muted); }
+    .results .val { font-weight: 600; }
+    .results .val.primary { color: var(--accent); font-size: 1.1rem; }
+    .badge {
+      display: inline-block; padding: 0.25rem 0.6rem; border-radius: 6px;
+      font-weight: 600; font-size: 0.85rem;
+    }
+    .badge.good { background: rgba(47, 158, 68, 0.15); color: var(--good); }
+    .badge.warn { background: rgba(240, 140, 0, 0.15); color: var(--warn); }
+    .badge.bad  { background: rgba(224, 49, 49, 0.15); color: var(--bad); }
+    canvas { width: 100%; height: 220px; display: block; background: var(--input-bg); border-radius: 8px; }
+    .links a { display: inline-block; margin-right: 1rem; color: var(--accent); text-decoration: none; font-size: 0.9rem; }
+    .links a:hover { text-decoration: underline; }
+    .formula {
+      background: var(--card-bg); border-left: 3px solid var(--accent);
+      padding: 0.75rem 1rem; margin: 0.75rem 0; font-size: 0.9rem;
+      overflow-x: auto;
+    }
+    table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.92rem; }
+    th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--card-border); vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; }
+    code { background: var(--card-bg); padding: 0.1rem 0.35rem; border-radius: 4px; font-size: 0.88em; }
+    pre { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px;
+          padding: 1rem; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; }
+    ul { margin: 0.5rem 0; padding-left: 1.2rem; }
+    li { margin: 0.3rem 0; }
+    .note { color: var(--muted); font-size: 0.88rem; }
+    .restab { width: 100%; border-collapse: collapse; margin: 0.5rem 0 1rem; font-size: 0.92rem; }
+    .restab th, .restab td { text-align: left; padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--card-border); }
+    .restab th { color: var(--muted); font-weight: 600; }
+    .restab td:last-child { font-variant-numeric: tabular-nums; }
+    figure { margin: 1rem 0; }
+    figure img { width: 100%; height: auto; border: 1px solid var(--card-border); border-radius: 8px; background: #fff; }
+    figcaption { color: var(--muted); font-size: 0.85rem; margin-top: 0.4rem; }
+    ul.downloads { list-style: none; padding-left: 0; }
+    ul.downloads li { margin: 0.5rem 0; }
+    ul.downloads a { display: inline-block; font-weight: 600; color: var(--accent); text-decoration: none;
+                     border: 1px solid var(--card-border); border-radius: 8px; padding: 0.25rem 0.7rem;
+                     background: var(--input-bg); margin-right: 0.35rem; }
+    ul.downloads a:hover { background: var(--card-hover, var(--card-bg)); text-decoration: none; }
+    footer { margin-top: 2rem; color: var(--muted); font-size: 0.85rem; text-align: center;
+             border-top: 1px solid var(--card-border); padding-top: 1rem; }
+  </style>
+</head>
+<body>
+  <a class="back" href="../">← SSC (spot size converter)</a>
+  <h1>2.5% 3 µm × 3 µm SSC @ 1550 nm — DRC ≥ 0.5 µm, GA + 3D-BPM</h1>
+  <p class="subtitle">2.5% Δ GeO₂-silica 3×3 µm 코어 ↔ SMF-28, 1550 nm. 최소 선폭·갭 0.5 µm 제약 하에서 실제 tooth/gap 형상을 그대로 넣은 3D BPM을 목적함수로 GA 최적화한 segmented SSC — 결합손실 <strong>0.294 dB</strong> (bare 3.32 dB).</p>
+
+  <div class="panel">
+    <h3>결과 요약</h3>
+    <table class="restab">
+      <tr><th>항목</th><th>값</th></tr>
+      <tr><td>SSC ↔ SMF-28 결합손실 (true-segment 3D BPM, dx 0.10 µm)</td><td><strong>0.294 dB</strong> (η = 93.5 %)</td></tr>
+      <tr><td>2D FDTD 보정 반영 추정치</td><td>≈ 0.30 – 0.32 dB</td></tr>
+      <tr><td>bare 3×3 µm 도파로 ↔ SMF-28 (SSC 없음)</td><td>3.32 dB</td></tr>
+      <tr><td>칩 모드 / facet 모드 크기 (D4σ)</td><td>3.9 × 3.9 µm → 11.9 × 11.6 µm (거의 원형)</td></tr>
+      <tr><td>구조</td><td>폭 3 µm 고정, pitch 2.017 µm × 430 period, duty 0.752 → 0.248 (선형), 길이 886 µm</td></tr>
+      <tr><td>DRC (GDS 실측)</td><td>min tooth 0.501 µm · min gap 0.501 µm · min width 2.99 µm — <span class="badge good">PASS ≥ 0.5 µm</span></td></tr>
+      <tr><td>1500–1600 nm</td><td>0.29 – 0.36 dB</td></tr>
+    </table>
+  </div>
+
+  <h2>설계 조건</h2>
+  <table>
+    <tr><th>파라미터</th><th>값</th><th>비고</th></tr>
+    <tr><td>파장</td><td>1550 nm</td><td>1500–1600 nm sweep 포함</td></tr>
+    <tr><td>클래드 n<sub>clad</sub></td><td>1.44402</td><td>fused silica, Malitson Sellmeier</td></tr>
+    <tr><td>코어 n<sub>core</sub></td><td>1.48154</td><td>Δ = (n₁² − n₂²)/(2n₁²) = 2.5 %</td></tr>
+    <tr><td>코어</td><td>3.0 × 3.0 µm</td><td>두께는 증착으로 고정 → SSC는 마스크(평면) 패턴만으로 구현</td></tr>
+    <tr><td>SMF-28 MFD</td><td>10.4 µm</td><td>Gaussian, w₀ = 5.2 µm</td></tr>
+    <tr><td>최소 선폭 / 갭</td><td>0.5 µm</td><td>tooth 길이, gap 길이, 코어 폭 모두 적용</td></tr>
+  </table>
+
+  <h2>왜 단순하지 않은가</h2>
+  <ul>
+    <li><strong>모드 크기 차이:</strong> 2.5% Δ 3 µm 코어는 D4σ 3.9 µm 모드만 가두므로 SMF-28(10.4 µm)과 직접 맞대면 3.32 dB가 손실됩니다.</li>
+    <li><strong>두께 고정의 한계:</strong> 마스크로는 폭과 z 방향 duty만 바꿀 수 있습니다. 실효매질(duty 평균) 모델에서 손실이 최소인 facet은 폭 7–8 µm / duty 0.18 인데, 이때 모드는 11 × 9.5 µm 타원형이 되어 하한이 <strong>≈ 0.166 dB</strong>입니다.</li>
+    <li><strong>세그먼트 산란:</strong> 2.5% 고대비에서는 갭 하나하나가 강한 산란체입니다. 실제 tooth/gap을 넣은 3D BPM으로 보면 실효매질 최적점(pitch 2.8 µm, duty 0.18)에 <strong>+0.5 dB</strong>의 방사 손실이 더해집니다. pitch를 줄이면 산란이 줄지만, tooth ≥ 0.5 µm 제약 때문에 facet duty의 하한(0.5/P)이 올라갑니다.</li>
+    <li>즉 <em>세그먼트 방사</em>와 <em>facet 모드 정합</em>이 DRC를 통해 서로 묶여 있어서, 실효매질 모델이 아니라 실제 형상을 직접 평가하는 최적화가 필요했습니다.</li>
+  </ul>
+
+  <h2>해석 방법</h2>
+  <div class="formula">η = |∫ E<sub>out</sub> · E<sub>SMF</sub>* dA|² / ∫|E<sub>SMF</sub>|² dA &nbsp;(입력 = 단위 파워 칩 고유모드) &nbsp;&nbsp;→&nbsp;&nbsp; Loss = −10·log₁₀ η</div>
+  <ul>
+    <li><strong>모드 해석:</strong> 스칼라 유한차분 고유모드 solver (5-point Laplacian, sub-pixel 면적평균 굴절률).</li>
+    <li><strong>3D BPM:</strong> 스칼라 paraxial Crank–Nicolson, Peaceman–Rachford ADI, numba 병렬 Thomas 해법, 이차 흡수경계. 모드 solver와 <em>동일한</em> 이산 연산자를 써서 고유모드가 그대로 전파됩니다 — 500 µm 자기전파 overlap 0.99999999 (기존 페이지에서 언급한 “mode-beating artefact” 없음).</li>
+    <li><strong>손실 정의:</strong> facet에서의 출력장과 SMF Gaussian의 overlap이므로 테이퍼 방사 손실 + facet 부정합이 모두 포함됩니다. facet Fresnel 반사(굴절률 정합 가정)는 제외.</li>
+    <li><strong>수렴:</strong> 세그먼트 BPM은 고각 방사 성분 때문에 격자에 민감합니다 (pitch 2.8 µm 케이스: dx 0.35 → 0.34 dB, 0.18 → 0.57, 0.12 → 0.73, 0.09 → 0.70 dB). 최종 검증은 수렴 영역인 dx = 0.10 µm, dz ≤ 0.2 µm에서 수행했습니다.</li>
+    <li><strong>Bragg 반사 회피:</strong> BPM은 단방향이라 역방향 Bragg 반사를 볼 수 없으므로, GA에서 2·P·n<sub>eff</sub>/λ가 정수에서 0.08 이상 떨어지도록 제약했습니다. 최종 pitch 2.017 µm → 3.76–3.80 (정수 4와 0.2 이상 이격).</li>
+  </ul>
+
+  <h3>GA 3단계</h3>
+  <table>
+    <tr><th>단계</th><th>목적함수</th><th>결과</th></tr>
+    <tr><td>1. 탐색</td><td>실효매질(duty 평균) 3D BPM, dx 0.35 µm</td><td>0.166 dB — pitch를 보지 못하므로 비현실적 하한</td></tr>
+    <tr><td>2. 설계 GA</td><td><strong>실제 tooth/gap 3D BPM</strong>, dx 0.15 µm, 6 유전자 (L, P, d<sub>facet</sub>, W<sub>facet</sub>, p<sub>d</sub>, p<sub>w</sub>), DRC·Bragg 제약, pop 16 × 12 세대</td><td>0.284 dB, pitch ≈ 2.0 µm로 수렴</td></tr>
+    <tr><td>3. 국소 정밀화</td><td>동일, 좁은 범위, pop 12 × 9 세대</td><td>0.275 dB (dx 0.15) → <strong>0.294 dB</strong> (dx 0.10 검증)</td></tr>
+  </table>
+  <p class="note">GA는 양 끝에서 DRC 경계에 붙었습니다: 시작 갭 = 0.5 µm (duty 0.752), facet tooth = 0.5 µm (duty 0.248). 폭은 3 µm 그대로 두는 순수 duty 테이퍼가 최적이었고, 이 조합에서 facet 모드가 11.9 × 11.6 µm로 거의 원형이 되어 타원 문제가 해소됩니다. 남는 손실은 약하게 도파되는 facet 모드의 비-Gaussian 꼬리(facet 모드 자체의 SMF 정합 0.23 dB)와 세그먼트 방사(≈ 0.04–0.06 dB)입니다.</p>
+
+  <h3>교차 검증</h3>
+  <table>
+    <tr><th>방법</th><th>손실</th><th>의미</th></tr>
+    <tr><td>true-segment 3D BPM (dx 0.10)</td><td><strong>0.294 dB</strong></td><td>설계값</td></tr>
+    <tr><td>실효매질 3D BPM</td><td>0.256 dB</td><td>세그먼트 방사 제외 → 방사분 ≈ 0.04 dB</td></tr>
+    <tr><td>local-mode EME (80 slice overlap 곱 × facet)</td><td>0.316 dB</td><td>junction 0.051 + taper 0.084 + facet 0.232 dB (보수적 상한)</td></tr>
+    <tr><td>2D FDTD vs paraxial BPM (60 µm 세그먼트 구간)</td><td>BPM이 −0.06 ~ +0.02 dB</td><td>paraxial BPM이 세그먼트 손실을 약간 과소평가 → 설계값에 +0.01–0.03 dB 보정</td></tr>
+  </table>
+
+  <figure>
+    <img src="./ssc_result_summary.png" alt="GA convergence, facet-mode loss map, taper law, BPM field, facet profiles, wavelength, misalignment and fabrication tolerance" loading="lazy" />
+    <figcaption>GA 수렴(3단계), facet 폭–duty 손실 지도(흰 점선 = tooth 0.5 µm 경계), duty/폭 테이퍼 법칙, 3D BPM 장 분포(x–z, y–z), facet 모드 단면 vs SMF-28, 파장·광섬유 정렬오차·공정(CD bias, facet 절단 위치) 허용도.</figcaption>
+  </figure>
+  <figure>
+    <img src="./ssc_compare.png" alt="Loss comparison and 2D FDTD calibration" loading="lazy" />
+    <figcaption>왼쪽: 방법별 결합손실 비교 (bare, solid inverse taper 대안, GA segmented SSC 3가지 평가). 오른쪽: 60 µm 세그먼트 구간에 대한 2D full-wave FDTD와 paraxial BPM 비교.</figcaption>
+  </figure>
+
+  <h2>허용도</h2>
+  <table>
+    <tr><th>변수</th><th>조건</th><th>손실 (dB)</th></tr>
+    <tr><td rowspan="2">CD bias (tooth 길이·폭 동시)</td><td>−0.10 / −0.05 µm</td><td>0.533 / 0.416</td></tr>
+    <tr><td>+0.05 / +0.10 µm</td><td>0.347 / 0.383</td></tr>
+    <tr><td>facet 절단 위치</td><td>−0.25 µm (마지막 tooth 깎임) ~ +1.5 µm (갭 안)</td><td>0.297 ~ 0.302</td></tr>
+    <tr><td>SMF 정렬오차 (x 또는 y)</td><td>0.5 / 1.0 / 2.0 µm</td><td>0.335 / 0.458 / 0.948</td></tr>
+    <tr><td>파장</td><td>1500 / 1525 / 1575 / 1600 nm</td><td>0.317 / 0.296 / 0.323 / 0.357</td></tr>
+  </table>
+  <p class="note">CD가 줄어드는 쪽(−bias)이 더 민감합니다 — facet 모드가 cutoff 가까이 밀려 n<sub>eff</sub> 여유가 0.0007에 불과하기 때문입니다. 공정 bias를 알고 있다면 마스크에 그만큼 보정 bias를 주는 것이 좋습니다. facet 절단(연마) 위치에는 둔감해서 dicing/polishing 공차 부담은 작습니다.</p>
+
+  <h2>대안: solid inverse taper</h2>
+  <p>갭이 없는 단순 폭 테이퍼(3 µm → 0.55 µm tip, 2 mm, √ 형상)도 같은 BPM으로 <strong>0.300 dB</strong>가 나와 segmented 설계와 거의 같습니다. tip 0.50 / 0.60 / 0.65 µm에서는 0.33 / 0.32 / 0.40 dB. 0.5 µm 갭 패턴이 부담스러운 공정이라면 고려할 만해서 GDS에 <code>SSC_ALT_INV_TAPER</code> 셀로 함께 넣었습니다 (길이가 2배 이상이고 tip 폭이 DRC 한계에 가깝다는 점은 감안).</p>
+
+  <h2>Device layout (GDS)</h2>
+  <figure>
+    <img src="./ssc_layout.png" alt="SSC layout: full device, chip-side lead and first gaps, facet-side last teeth" loading="lazy" />
+    <figcaption>위: 전체 SSC (x 방향 압축). 가운데: 칩 쪽 3 µm solid lead → 첫 갭 0.5 µm. 아래: facet 쪽 마지막 tooth 0.5 µm, 빨간 점선이 SMF facet.</figcaption>
+  </figure>
+  <table>
+    <tr><th>Cell</th><th>내용</th></tr>
+    <tr><td><code>SSC_2p5_3um_1550</code></td><td>단일 SSC: 3 µm solid lead 20 µm → 430 period segmented taper → facet (+x)</td></tr>
+    <tr><td><code>SSC_B2B_TEST</code></td><td>SSC – 3 mm 직선 3 µm 도파로 – SSC (back-to-back, 총 4.77 mm) — 삽입손실/cut-back 측정용</td></tr>
+    <tr><td><code>REF_STRAIGHT</code></td><td>SSC 없는 같은 길이 3 µm 직선 도파로 (비교 기준)</td></tr>
+    <tr><td><code>SSC_ALT_INV_TAPER</code></td><td>대안 solid inverse taper (tip 0.55 µm, 2 mm)</td></tr>
+    <tr><td><code>TOP</code></td><td>위 4개를 250 µm 간격으로 배치</td></tr>
+  </table>
+  <p class="note">레이어: (1,0) WG core · (2,0) FACET 절단/연마 위치 마커 · (10,0) TEXT (비공정). 좌표 1 nm grid snap. 실제 공정 PDK 레이어로 remap 필요.</p>
+
+  <h2>Downloads</h2>
+  <ul class="downloads">
+    <li><a href="./ssc_2p5pct_3um_1550.gds" download>ssc_2p5pct_3um_1550.gds</a> 최종 GDS (4 cells + TOP)</li>
+    <li><a href="./ssc_core.py" download>ssc_core.py</a> 모드 solver · ADI-CN 3D BPM · SSC 형상/DRC</li>
+    <li><a href="./ssc_ga.py" download>ssc_ga.py</a> GA (stage 1 실효매질 / stage 2 실제 세그먼트)</li>
+    <li><a href="./ga_refine.py" download>ga_refine.py</a> stage 3 국소 정밀화</li>
+    <li><a href="./verify_final.py" download>verify_final.py</a> dx 0.10 µm 최종 검증 + 허용도</li>
+    <li><a href="./fdtd2d_check.py" download>fdtd2d_check.py</a> 2D FDTD vs BPM 보정</li>
+    <li><a href="./compare_solid.py" download>compare_solid.py</a> solid inverse taper 대안</li>
+    <li><a href="./scan_facet.py" download>scan_facet.py</a> facet 폭–duty 지도</li>
+    <li><a href="./make_gds.py" download>make_gds.py</a> GDS 생성 (gdstk)</li>
+    <li><a href="./make_figures.py" download>make_figures.py</a> 그림 생성</li>
+    <li><a href="./final_design.json" download>final_design.json</a> · <a href="./verify_results.json" download>verify_results.json</a> · <a href="./ga_stage3_refine.json" download>ga_stage3_refine.json</a> · <a href="./ga_stage2_seg.json" download>ga_stage2_seg.json</a> · <a href="./fdtd2d_calibration.json" download>fdtd2d_calibration.json</a></li>
+  </ul>
+
+  <h2>재현</h2>
+<pre>pip install numpy scipy numba gdstk matplotlib
+python scan_facet.py          # facet landscape            (~1.5 min)
+python ssc_ga.py 1            # stage 1: effective-medium GA (~2 min)
+python ssc_ga.py 2            # stage 2: true-segment GA     (~25 min, 2 cores)
+python ga_refine.py           # stage 3: local refinement    (~20 min)
+python verify_final.py        # dx = 0.10 um verification    (~5 min)
+python compare_solid.py       # solid inverse-taper alternative
+python fdtd2d_check.py        # 2D FDTD calibration           (~6 min)
+python make_gds.py            # -> ssc_2p5pct_3um_1550.gds, ssc_layout.png
+python make_figures.py        # -> ssc_result_summary.png, ssc_compare.png</pre>
+
+  <h2>한계와 주의</h2>
+  <ul>
+    <li>스칼라 해석입니다 (TE/TM 구분 없음). 2.5% Δ에서 편광 의존성은 작지만 0.0x dB 수준의 차이는 있을 수 있습니다.</li>
+    <li>paraxial BPM은 세그먼트에서 고각으로 나가는 방사를 근사적으로만 다룹니다 — 2D FDTD 보정 결과 BPM이 약간 낙관적이어서 0.30–0.32 dB를 현실적 추정치로 봅니다.</li>
+    <li>역방향 반사(Bragg, facet Fresnel)는 BPM에 포함되지 않습니다. Bragg는 pitch 선택으로 회피했고, facet은 굴절률 정합(접착제/젤)을 가정했습니다.</li>
+    <li>SMF-28은 MFD 10.4 µm Gaussian으로 근사했습니다.</li>
+  </ul>
+
+  <footer>Generated with Python (numpy/scipy/numba/gdstk) · part of <a href="../">SSC (spot size converter)</a></footer>
+
+</body>
+</html>

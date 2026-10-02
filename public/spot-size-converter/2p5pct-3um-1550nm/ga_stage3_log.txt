@@ -1,0 +1,10 @@
+gen  0  best 0.2844 dB  median 0.3517  L_um=865 pitch_um=2.01 d_facet=0.242 w_facet_um=2.95 p_d=1.14 p_w=1.08
+gen  1  best 0.2759 dB  median 0.3218  L_um=865 pitch_um=2.01 d_facet=0.236 w_facet_um=2.95 p_d=1.07 p_w=0.969
+gen  2  best 0.2759 dB  median 0.2862  L_um=865 pitch_um=2.01 d_facet=0.236 w_facet_um=2.95 p_d=1.07 p_w=0.969
+gen  3  best 0.2758 dB  median 0.2784  L_um=869 pitch_um=2.01 d_facet=0.241 w_facet_um=2.95 p_d=1.04 p_w=0.977
+gen  4  best 0.2756 dB  median 0.2823  L_um=865 pitch_um=2.01 d_facet=0.236 w_facet_um=2.96 p_d=1.07 p_w=0.966
+gen  5  best 0.2756 dB  median 0.2847  L_um=865 pitch_um=2.01 d_facet=0.236 w_facet_um=2.96 p_d=1.07 p_w=0.966
+gen  6  best 0.2753 dB  median 0.2804  L_um=868 pitch_um=2.01 d_facet=0.247 w_facet_um=2.99 p_d=1.04 p_w=1.04
+gen  7  best 0.2751 dB  median 0.2786  L_um=869 pitch_um=2.02 d_facet=0.233 w_facet_um=2.99 p_d=1.05 p_w=1.03
+gen  8  best 0.2751 dB  median 0.2757  L_um=869 pitch_um=2.02 d_facet=0.243 w_facet_um=2.99 p_d=1.05 p_w=1.04
+{'L_um': 866.8425313534804, 'pitch_um': 2.016521500112627, 'd_facet': 0.24323762372178626, 'w_facet_um': 2.9898251355552223, 'p_d': 1.0459368457040363, 'p_w': 1.2311322897730388} 0.27495302264148325 {'min_tooth': 0.5009999999999764, 'min_gap': 0.5010000000000012, 'min_width': 2.989847021670222, 'length': 885.7940000000002}

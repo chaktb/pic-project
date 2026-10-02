@@ -1,0 +1,4 @@
+P=2.00 duty=0.75 L=60.0um  FDTD 0.0497 dB   paraxial BPM 0.0268 dB  (per-period: 0.00166 vs 0.00089)
+P=2.00 duty=0.50 L=60.0um  FDTD 0.2888 dB   paraxial BPM 0.2450 dB  (per-period: 0.00963 vs 0.00817)
+P=2.00 duty=0.30 L=60.0um  FDTD 1.1057 dB   paraxial BPM 1.0492 dB  (per-period: 0.03686 vs 0.03497)
+P=2.80 duty=0.40 L=58.8um  FDTD 0.5788 dB   paraxial BPM 0.6019 dB  (per-period: 0.02756 vs 0.02866)

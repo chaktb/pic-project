@@ -1,0 +1,24 @@
+n_clad=1.44402 n_core=1.48154  bare loss=3.331 dB
+seed design loss 0.2129 dB (0.4s/eval)
+gen  0  best 0.2129 dB  median 0.5913  L_um=700 pitch_um=3 d_facet=0.19 w_facet_um=7 p_d=1 p_w=1
+gen  1  best 0.1994 dB  median 0.2977  L_um=897 pitch_um=2.91 d_facet=0.188 w_facet_um=7.14 p_d=0.957 p_w=1
+gen  2  best 0.1802 dB  median 0.2482  L_um=629 pitch_um=4.59 d_facet=0.175 w_facet_um=7.08 p_d=0.662 p_w=1.39
+gen  3  best 0.1703 dB  median 0.2230  L_um=1.05e+03 pitch_um=4.02 d_facet=0.174 w_facet_um=7.12 p_d=0.682 p_w=1.36
+gen  4  best 0.1703 dB  median 0.2052  L_um=1.05e+03 pitch_um=4.02 d_facet=0.174 w_facet_um=7.12 p_d=0.682 p_w=1.36
+gen  5  best 0.1703 dB  median 0.1869  L_um=1.05e+03 pitch_um=4.02 d_facet=0.174 w_facet_um=7.12 p_d=0.682 p_w=1.36
+gen  6  best 0.1703 dB  median 0.1861  L_um=1.05e+03 pitch_um=4.02 d_facet=0.174 w_facet_um=7.12 p_d=0.682 p_w=1.36
+gen  7  best 0.1701 dB  median 0.1870  L_um=1.07e+03 pitch_um=3.84 d_facet=0.172 w_facet_um=7.94 p_d=0.726 p_w=1.61
+gen  8  best 0.1679 dB  median 0.1786  L_um=1.08e+03 pitch_um=4.39 d_facet=0.182 w_facet_um=7 p_d=0.643 p_w=1.45
+gen  9  best 0.1679 dB  median 0.1719  L_um=1.08e+03 pitch_um=4.39 d_facet=0.182 w_facet_um=7 p_d=0.643 p_w=1.45
+gen 10  best 0.1673 dB  median 0.1809  L_um=1.11e+03 pitch_um=4.19 d_facet=0.18 w_facet_um=6.98 p_d=0.675 p_w=1.41
+gen 11  best 0.1673 dB  median 0.1795  L_um=1.11e+03 pitch_um=4.19 d_facet=0.18 w_facet_um=6.98 p_d=0.675 p_w=1.41
+gen 12  best 0.1659 dB  median 0.1774  L_um=1.09e+03 pitch_um=4.28 d_facet=0.18 w_facet_um=6.55 p_d=0.678 p_w=1.44
+gen 13  best 0.1659 dB  median 0.1828  L_um=1.09e+03 pitch_um=4.28 d_facet=0.18 w_facet_um=6.55 p_d=0.678 p_w=1.44
+{
+ "L_um": 1090.3815095514908,
+ "pitch_um": 4.27916385893704,
+ "d_facet": 0.17960984429772564,
+ "w_facet_um": 6.546254053475675,
+ "p_d": 0.6781292284780505,
+ "p_w": 1.4429306391796195
+} 0.16585156217669136 {'min_tooth': 0.7729999999999109, 'min_gap': 0.5440000000000005, 'min_width': 3.0, 'length': 1107.6389999999997}
